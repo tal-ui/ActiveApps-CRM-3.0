@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search, Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS } from "../lib/objects";
 import { useLookupMaps } from "../lib/lookups";
 import { Button, EmptyState, Input, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
 import RecordForm from "../components/RecordForm";
+import InvoiceGenerator from "../components/InvoiceGenerator";
 
 const PAGE_SIZE = 25;
 
@@ -22,6 +23,7 @@ export default function ListPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(0);
   const [showForm, setShowForm] = useState(false);
+  const [showGenerator, setShowGenerator] = useState(false);
   const [reload, setReload] = useState(0);
 
   const columns = useMemo(
@@ -123,6 +125,12 @@ export default function ListPage() {
               className="pl-9 w-64"
             />
           </div>
+          {object === "invoices" && (
+            <Button variant="ghost" onClick={() => setShowGenerator(true)}>
+              <Wand2 size={15} strokeWidth={1.5} />
+              From Time Entries
+            </Button>
+          )}
           <Button onClick={() => setShowForm(true)}>
             <Plus size={16} strokeWidth={2} />
             New {def.singular}
@@ -193,6 +201,9 @@ export default function ListPage() {
             navigate(`/${object}/${id}`);
           }}
         />
+      )}
+      {showGenerator && (
+        <InvoiceGenerator onClose={() => setShowGenerator(false)} />
       )}
     </div>
   );

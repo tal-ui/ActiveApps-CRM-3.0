@@ -8,6 +8,8 @@ import RecordPage from "./pages/RecordPage";
 import TimeTrackingPage from "./pages/TimeTrackingPage";
 import CustomFieldsPage from "./pages/settings/CustomFieldsPage";
 import LayoutBuilderPage from "./pages/settings/LayoutBuilderPage";
+import FinancialDashboard from "./pages/FinancialDashboard";
+import MonthlyDashboard from "./pages/MonthlyDashboard";
 import { Spinner } from "./components/ui";
 
 function Protected() {
@@ -31,6 +33,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<Protected />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/financial" element={<FinancialDashboard />} />
+            <Route path="/monthly" element={<MonthlyDashboard />} />
             <Route path="/time_entries" element={<TimeTrackingPage />} />
             <Route path="/settings/custom-fields" element={<CustomFieldsPage />} />
             <Route path="/settings/layouts" element={<LayoutBuilderPage />} />

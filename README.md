@@ -2,7 +2,7 @@
 
 Salesforce-inspired CRM for ActiveApps, built with React + Vite + Tailwind on Supabase, styled with the ActiveApps "Dark Command Center" design system.
 
-## What's included (Sprints 1–4)
+## What's included (Sprints 1–5)
 
 - **Login** — Supabase email/password auth (all data is protected by Row Level Security)
 - **Dashboard** — open pipeline value, open leads, active projects, hours this month, pipeline-by-stage bars, recent activity
@@ -16,6 +16,10 @@ Salesforce-inspired CRM for ActiveApps, built with React + Vite + Tailwind on Su
 - **Monthly hours PDF** (Sprint 3) — branded report (print variant: navy + mint on white) with summary boxes and a detail table grouped by project with subtotals; respects the active filters
 - **Custom fields** (Sprint 4) — Settings → Custom Fields: add fields of 14 types (text, currency, picklists, multi-select, date/time, checkbox, lookup relationships, etc.) to any object with no database changes (EAV pattern). They appear automatically in create/edit forms and on record pages, with required validation, help text, and picklist option config
 - **Page layout builder** (Sprint 4) — Settings → Page Layouts: Salesforce-style drag-and-drop builder. Drag fields from the palette onto sections, reorder and move between sections, add/rename/reorder/delete sections, set 1 or 2 columns, configure per-field required/read-only/visible/width, and order or hide related lists. Saved layouts drive how record pages render
+- **Financial dashboard** (Sprint 5) — invoiced/collected/outstanding/overdue totals, unpaid invoice aging buckets, invoiced vs collected by month, top accounts by revenue, billable utilization
+- **Monthly operations dashboard** (Sprint 5) — month picker; hours by project and team member, billable split, budget vs actual per active project, tasks completed vs created, revenue collected
+- **Invoice generation** (Sprint 5) — generate an invoice from a project's unbilled billable time entries (date-range scoped, line items grouped by task, entries marked as billed), draft → sent → paid status flow, and a branded invoice PDF download
+- **Account & project insights** (Sprint 5) — account records show pipeline/projects/invoiced/collected/outstanding; project records show budget vs actual bars (hours and value) with one-click invoicing of unbilled hours
 
 ## Run locally
 
@@ -43,5 +47,8 @@ npm run build   # outputs to dist/
 
 ## Next sprints (from the build plan)
 
-- Sprint 5: financial dashboards + invoice generation from time entries
 - Sprint 6: Slack integration
+
+## Deployment
+
+Pushes to `main` on [tal-ui/ActiveApps-CRM-3.0](https://github.com/tal-ui/ActiveApps-CRM-3.0) auto-deploy to production: **https://activeapps-crm-v3.vercel.app**

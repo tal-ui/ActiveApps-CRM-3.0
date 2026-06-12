@@ -23,6 +23,9 @@ import RecordForm from "../components/RecordForm";
 import RelatedList from "../components/RelatedList";
 import ActivityTimeline from "../components/ActivityTimeline";
 import LeadConvertModal from "../components/LeadConvertModal";
+import AccountInsights from "../components/AccountInsights";
+import ProjectBudget from "../components/ProjectBudget";
+import InvoiceActions from "../components/InvoiceActions";
 
 interface RenderItem {
   key: string;
@@ -229,6 +232,12 @@ export default function RecordPage() {
                 Convert
               </Button>
             )}
+            {object === "invoices" && (
+              <InvoiceActions
+                invoice={record}
+                onChanged={() => setReload((r) => r + 1)}
+              />
+            )}
             <Button variant="ghost" onClick={() => setShowEdit(true)}>
               <Pencil size={14} strokeWidth={1.5} />
               Edit
@@ -253,6 +262,10 @@ export default function RecordPage() {
           </div>
         )}
       </div>
+
+      {/* Object-specific insight widgets (Sprint 5) */}
+      {object === "accounts" && <AccountInsights accountId={id} />}
+      {object === "projects" && <ProjectBudget project={record} />}
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* Field sections (layout-driven) */}
