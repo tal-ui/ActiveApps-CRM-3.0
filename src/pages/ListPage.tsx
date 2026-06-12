@@ -1,0 +1,199 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { OBJECTS } from "../lib/objects";
+import { useLookupMaps } from "../lib/lookups";
+import { Button, EmptyState, Input, Spinner } from "../components/ui";
+import DataTable from "../components/DataTable";
+import RecordForm from "../components/RecordForm";
+
+const PAGE_SIZE = 25;
+
+export default function ListPage() {
+  const { object = "" } = useParams();
+  const def = OBJECTS[object];
+  const navigate = useNavigate();
+
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [sortField, setSortField] = useState("updated_at");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [page, setPage] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  const columns = useMemo(
+    () => (def ? def.fields.filter((f) => f.showInList).slice(0, 7) : []),
+    [def],
+  );
+  const lookupObjects = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          columns
+            .filter((c) => c.type === "lookup" && c.lookup)
+            .map((c) => c.lookup as string),
+        ),
+      ),
+    [columns],
+  );
+  const lookupMaps = useLookupMaps(lookupObjects);
+
+  useEffect(() => {
+    if (!def) return;
+    setLoading(true);
+    setPage(0);
+    supabase
+      .from(object)
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(1000)
+      .then(({ data }) => {
+        setRows((data ?? []) as Record<string, unknown>[]);
+        setLoading(false);
+      });
+  }, [object, def, reload]);
+
+  const filtered = useMemo(() => {
+    let out = rows;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      out = rows.filter((r) =>
+        def.searchFields.some((f) =>
+          String(r[f] ?? "").toLowerCase().includes(q),
+        ),
+      );
+    }
+    out = [...out].sort((a, b) => {
+      const av = a[sortField];
+      const bv = b[sortField];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+      return sortAsc ? cmp : -cmp;
+    });
+    return out;
+  }, [rows, search, sortField, sortAsc, def]);
+
+  if (!def) {
+    return <EmptyState message={`Unknown object: ${object}`} />;
+  }
+
+  const Icon = def.icon;
+  const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-[var(--radius)] bg-[rgba(60,201,152,0.08)] border border-[rgba(60,201,152,0.2)] flex items-center justify-center">
+            <Icon size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
+          </div>
+          <div>
+            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+              {def.plural}
+            </h1>
+            <p className="label-mono">
+              {filtered.length} record{filtered.length === 1 ? "" : "s"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search
+              size={16}
+              strokeWidth={1.5}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)]"
+            />
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              placeholder={`Search ${def.plural.toLowerCase()}…`}
+              className="pl-9 w-64"
+            />
+          </div>
+          <Button onClick={() => setShowForm(true)}>
+            <Plus size={16} strokeWidth={2} />
+            New {def.singular}
+          </Button>
+        </div>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <Spinner />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          message={
+            search
+              ? "No records match your search."
+              : `No ${def.plural.toLowerCase()} yet. Create the first one.`
+          }
+        />
+      ) : (
+        <>
+          <DataTable
+            columns={columns}
+            rows={pageRows}
+            lookupMaps={lookupMaps}
+            onRowClick={(row) => navigate(`/${object}/${row.id}`)}
+            sortField={sortField}
+            sortAsc={sortAsc}
+            onSort={(f) => {
+              if (sortField === f) setSortAsc(!sortAsc);
+              else {
+                setSortField(f);
+                setSortAsc(true);
+              }
+            }}
+          />
+          {pageCount > 1 && (
+            <div className="flex items-center justify-end gap-3 mt-4">
+              <span className="label-mono">
+                Page {page + 1} / {pageCount}
+              </span>
+              <Button
+                variant="subtle"
+                disabled={page === 0}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft size={16} strokeWidth={1.5} />
+              </Button>
+              <Button
+                variant="subtle"
+                disabled={page >= pageCount - 1}
+                onClick={() => setPage(page + 1)}
+              >
+                <ChevronRight size={16} strokeWidth={1.5} />
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+
+      {showForm && (
+        <RecordForm
+          object={object}
+          record={null}
+          onClose={() => setShowForm(false)}
+          onSaved={(id) => {
+            setShowForm(false);
+            setReload((r) => r + 1);
+            navigate(`/${object}/${id}`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
