@@ -10,6 +10,7 @@ import CustomFieldsPage from "./pages/settings/CustomFieldsPage";
 import LayoutBuilderPage from "./pages/settings/LayoutBuilderPage";
 import FinancialDashboard from "./pages/FinancialDashboard";
 import MonthlyDashboard from "./pages/MonthlyDashboard";
+import SlackIntegrationPage from "./pages/settings/SlackIntegrationPage";
 import { Spinner } from "./components/ui";
 
 function Protected() {
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/time_entries" element={<TimeTrackingPage />} />
             <Route path="/settings/custom-fields" element={<CustomFieldsPage />} />
             <Route path="/settings/layouts" element={<LayoutBuilderPage />} />
+            <Route path="/settings/slack" element={<SlackIntegrationPage />} />
             <Route path="/:object" element={<ListPage />} />
             <Route path="/:object/:id" element={<RecordPage />} />
           </Route>

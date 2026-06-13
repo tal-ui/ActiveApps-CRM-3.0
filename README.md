@@ -2,7 +2,7 @@
 
 Salesforce-inspired CRM for ActiveApps, built with React + Vite + Tailwind on Supabase, styled with the ActiveApps "Dark Command Center" design system.
 
-## What's included (Sprints 1–5)
+## What's included (Sprints 1–6, complete)
 
 - **Login** — Supabase email/password auth (all data is protected by Row Level Security)
 - **Dashboard** — open pipeline value, open leads, active projects, hours this month, pipeline-by-stage bars, recent activity
@@ -20,6 +20,11 @@ Salesforce-inspired CRM for ActiveApps, built with React + Vite + Tailwind on Su
 - **Monthly operations dashboard** (Sprint 5) — month picker; hours by project and team member, billable split, budget vs actual per active project, tasks completed vs created, revenue collected
 - **Invoice generation** (Sprint 5) — generate an invoice from a project's unbilled billable time entries (date-range scoped, line items grouped by task, entries marked as billed), draft → sent → paid status flow, and a branded invoice PDF download
 - **Account & project insights** (Sprint 5) — account records show pipeline/projects/invoiced/collected/outstanding; project records show budget vs actual bars (hours and value) with one-click invoicing of unbilled hours
+- **Slack integration** (Sprint 6) — Settings → Slack. Automatic Block Kit notifications fired by database triggers (new lead, opportunity stage change, deal won/lost, invoice overdue/paid, task assigned) with per-event toggles and channel routing; hourly cron flags 8h+ running timers and flips overdue invoices; `/crm` slash commands (search, pipeline, my-tasks, log, timer start/stop, report) served by signing-secret-verified Supabase Edge Functions (`slack-notify`, `slack-commands`)
+
+## Next sprints (from the build plan)
+
+All 6 sprints of the build plan are delivered. Candidate follow-ups: Kanban pipeline view, opportunity → project conversion action, Slack user mapping for direct-message notifications, role-based permissions.
 
 ## Run locally
 
@@ -44,10 +49,6 @@ Then open http://localhost:5173 and sign in with your CRM account (tal@activeapp
 ```bash
 npm run build   # outputs to dist/
 ```
-
-## Next sprints (from the build plan)
-
-- Sprint 6: Slack integration
 
 ## Deployment
 

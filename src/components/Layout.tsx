@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LayoutPanelLeft,
   LogOut,
+  Slack,
   SlidersHorizontal,
 } from "lucide-react";
 import { NAV_OBJECTS, OBJECTS } from "../lib/objects";
@@ -72,6 +73,10 @@ export default function Layout() {
             <NavLink to="/settings/layouts" className={navItemClass}>
               <LayoutPanelLeft size={16} strokeWidth={1.5} />
               Page Layouts
+            </NavLink>
+            <NavLink to="/settings/slack" className={navItemClass}>
+              <Slack size={16} strokeWidth={1.5} />
+              Slack
             </NavLink>
           </nav>
         </div>
