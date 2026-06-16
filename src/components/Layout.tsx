@@ -11,6 +11,7 @@ import {
 import { NAV_OBJECTS, OBJECTS } from "../lib/objects";
 import { useAuth } from "../lib/auth";
 import TimerWidget from "./TimerWidget";
+import ThemeToggle from "./ThemeToggle";
 
 export default function Layout() {
   const { profile, signOut } = useAuth();
@@ -24,7 +25,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen">
       {/* Sidebar */}
-      <aside className="w-60 bg-[var(--navy)] border-r border-[rgba(255,255,255,0.06)] h-screen fixed flex flex-col z-40">
+      <aside className="w-60 bg-[var(--navy)] border-r border-[var(--sidebar-border)] h-screen fixed flex flex-col z-40">
         <div className="p-5 flex-1 overflow-y-auto">
           <div className="flex items-center gap-2.5 mb-1">
             <img src="/aa-logo.png" alt="ActiveApps" className="w-7 h-7 rounded" />
@@ -82,7 +83,7 @@ export default function Layout() {
         </div>
 
         {/* User footer */}
-        <div className="p-4 border-t border-[rgba(255,255,255,0.04)]">
+        <div className="p-4 border-t border-[var(--hairline)]">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm text-[var(--text-light)] truncate">
@@ -109,7 +110,7 @@ export default function Layout() {
       {/* Main */}
       <main className="ml-60 min-h-screen">
         {/* Sticky header with global timer */}
-        <header className="sticky top-0 z-30 backdrop-blur-xl bg-[oklch(0.14_0.015_260_/_85%)] border-b border-[rgba(255,255,255,0.06)]">
+        <header className="sticky top-0 z-30 backdrop-blur-xl bg-[var(--header-bg)] border-b border-[var(--sidebar-border)]">
           <div className="max-w-[1280px] mx-auto px-6 lg:px-8 h-14 flex items-center justify-between">
             <span className="label-mono">
               {new Date().toLocaleDateString(undefined, {
@@ -118,7 +119,10 @@ export default function Layout() {
                 day: "numeric",
               })}
             </span>
-            <TimerWidget />
+            <div className="flex items-center gap-3">
+              <TimerWidget />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
         <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-8">
