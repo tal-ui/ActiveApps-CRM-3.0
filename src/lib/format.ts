@@ -18,9 +18,12 @@ export function fmtDateTime(ms: number | null | undefined): string {
   });
 }
 
+// App-wide default currency. NIS (ISO 4217: ILS) is the default.
+export const DEFAULT_CURRENCY = "ILS";
+
 export function fmtCurrency(
   n: number | string | null | undefined,
-  currency = "USD",
+  currency = DEFAULT_CURRENCY,
 ): string {
   if (n === null || n === undefined || n === "") return "—";
   const num = typeof n === "string" ? parseFloat(n) : n;
@@ -28,11 +31,34 @@ export function fmtCurrency(
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
-      currency: currency || "USD",
+      currency: currency || DEFAULT_CURRENCY,
       maximumFractionDigits: 0,
     }).format(num);
   } catch {
-    return `$${num.toLocaleString()}`;
+    return `${num.toLocaleString()} ${currency}`;
+  }
+}
+
+/**
+ * ASCII-safe currency string for PDF output. jsPDF's built-in fonts don't
+ * include some currency glyphs (notably ₪ for ILS), so we render the ISO code
+ * instead, e.g. "ILS 1,234.00" / "USD 1,234.00".
+ */
+export function fmtMoneyAscii(
+  n: number,
+  currency = DEFAULT_CURRENCY,
+  maximumFractionDigits = 2,
+): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || DEFAULT_CURRENCY,
+      currencyDisplay: "code",
+      minimumFractionDigits: maximumFractionDigits === 0 ? 0 : 2,
+      maximumFractionDigits,
+    }).format(n);
+  } catch {
+    return `${currency || DEFAULT_CURRENCY} ${n.toLocaleString()}`;
   }
 }
 

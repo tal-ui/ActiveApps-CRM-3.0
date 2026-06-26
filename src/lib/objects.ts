@@ -181,7 +181,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "stage", label: "Stage", type: "picklist", required: true, defaultValue: "discovery", section: "Deal Information", options: opts("discovery", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"), showInList: true },
       { name: "type", label: "Type", type: "picklist", section: "Deal Information", options: opts("new_business", "expansion", "renewal", "other") },
       { name: "amount", label: "Amount", type: "currency", section: "Financials", showInList: true },
-      { name: "currency", label: "Currency", type: "text", defaultValue: "USD", section: "Financials" },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Financials" },
       { name: "probability", label: "Probability (%)", type: "number", section: "Financials" },
       { name: "close_date", label: "Close Date", type: "date", section: "Timeline", showInList: true },
       { name: "actual_close_date", label: "Actual Close Date", type: "date", section: "Timeline" },
@@ -234,7 +234,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "budget_hours", label: "Budget (Hours)", type: "number", section: "Budget" },
       { name: "budget_amount", label: "Budget (Amount)", type: "currency", section: "Budget" },
       { name: "hourly_rate", label: "Hourly Rate", type: "currency", section: "Budget" },
-      { name: "currency", label: "Currency", type: "text", defaultValue: "USD", section: "Budget" },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Budget" },
       { name: "description", label: "Scope & Notes", type: "textarea", section: "Notes" },
     ],
     relatedLists: [
@@ -332,7 +332,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "tax_rate", label: "Tax Rate (%)", type: "number", defaultValue: 0, section: "Amounts" },
       { name: "tax_amount", label: "Tax Amount", type: "currency", defaultValue: 0, section: "Amounts" },
       { name: "total_amount", label: "Total", type: "currency", defaultValue: 0, section: "Amounts", showInList: true },
-      { name: "currency", label: "Currency", type: "text", defaultValue: "USD", section: "Amounts" },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Amounts" },
       { name: "notes", label: "Notes", type: "textarea", section: "Notes" },
     ],
     relatedLists: [

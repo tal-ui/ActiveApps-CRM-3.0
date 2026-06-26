@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, Download, Send } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useLookupMaps } from "../lib/lookups";
+import { DEFAULT_CURRENCY } from "../lib/format";
 import { Button } from "./ui";
 
 export default function InvoiceActions({
@@ -43,7 +44,7 @@ export default function InvoiceActions({
       projectName: invoice.project_id
         ? (maps.projects?.[String(invoice.project_id)] ?? null)
         : null,
-      currency: String(invoice.currency ?? "USD"),
+      currency: String(invoice.currency ?? DEFAULT_CURRENCY),
       subtotal: Number(invoice.subtotal ?? 0),
       taxRate: Number(invoice.tax_rate ?? 0),
       taxAmount: Number(invoice.tax_amount ?? 0),

@@ -1,7 +1,7 @@
 import { Check, ExternalLink, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { FieldDef } from "../lib/objects";
-import { fmtCurrency, fmtDate, fmtNumber, titleCase } from "../lib/format";
+import { DEFAULT_CURRENCY, fmtCurrency, fmtDate, fmtNumber, titleCase } from "../lib/format";
 import { Badge } from "./ui";
 
 export default function FieldValue({
@@ -26,7 +26,7 @@ export default function FieldValue({
     case "currency":
       return (
         <span className="text-[var(--foreground)] font-[var(--font-mono)] text-[0.82rem]">
-          {fmtCurrency(raw as number, (record.currency as string) || "USD")}
+          {fmtCurrency(raw as number, (record.currency as string) || DEFAULT_CURRENCY)}
         </span>
       );
     case "number":

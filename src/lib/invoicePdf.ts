@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { fmtDate } from "./format";
+import { fmtDate, fmtMoneyAscii } from "./format";
 
 const NAVY: [number, number, number] = [12, 18, 26];
 const MINT: [number, number, number] = [60, 201, 152];
@@ -23,15 +23,10 @@ export interface InvoicePdfData {
   lines: { description: string; quantity: number; unitPrice: number; total: number }[];
 }
 
+// ISO-code display (e.g. "ILS 1,234.00") — jsPDF's built-in fonts lack some
+// currency glyphs such as ₪, so we avoid symbols in the PDF.
 function money(n: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency || "USD",
-    }).format(n);
-  } catch {
-    return `$${n.toFixed(2)}`;
-  }
+  return fmtMoneyAscii(n, currency);
 }
 
 async function loadLogoDataUrl(): Promise<string | null> {

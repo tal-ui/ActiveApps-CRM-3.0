@@ -4,7 +4,7 @@ import { Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { invalidateLookup, useLookupOptions } from "../lib/lookups";
-import { dateToMs, fmtCurrency, fmtHours, msToDateInput } from "../lib/format";
+import { dateToMs, DEFAULT_CURRENCY, fmtCurrency, fmtHours, msToDateInput } from "../lib/format";
 import {
   Button,
   EmptyState,
@@ -176,7 +176,7 @@ export default function InvoiceGenerator({
         tax_rate: 0,
         tax_amount: 0,
         total_amount: subtotal,
-        currency: project.currency || "USD",
+        currency: project.currency || DEFAULT_CURRENCY,
         notes: `Generated from ${entries.length} time entr${entries.length === 1 ? "y" : "ies"} (${from} → ${to})`,
         created_by_id: profile?.id ?? "system",
         created_at: now,
@@ -274,7 +274,7 @@ export default function InvoiceGenerator({
               <div className="bg-[var(--section-darker)] border border-[rgba(60,201,152,0.2)] rounded-[var(--radius-md)] p-4 text-center glow-mint">
                 <p className="label-mono mb-1">Invoice Total</p>
                 <p className="font-[var(--font-heading)] font-bold text-xl text-[var(--mint)]">
-                  {fmtCurrency(preview.amount, project?.currency ?? "USD")}
+                  {fmtCurrency(preview.amount, project?.currency ?? DEFAULT_CURRENCY)}
                 </p>
               </div>
             </div>
@@ -301,10 +301,10 @@ export default function InvoiceGenerator({
                         {g.hours.toFixed(2)}
                       </td>
                       <td className="px-3 py-2 text-sm font-[var(--font-mono)] text-[var(--text-mid)]">
-                        {fmtCurrency(g.rate, project?.currency ?? "USD")}
+                        {fmtCurrency(g.rate, project?.currency ?? DEFAULT_CURRENCY)}
                       </td>
                       <td className="px-3 py-2 text-sm font-[var(--font-mono)] text-[var(--foreground)]">
-                        {fmtCurrency(g.hours * g.rate, project?.currency ?? "USD")}
+                        {fmtCurrency(g.hours * g.rate, project?.currency ?? DEFAULT_CURRENCY)}
                       </td>
                     </tr>
                   ))}

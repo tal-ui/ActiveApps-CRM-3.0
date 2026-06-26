@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { invalidateLookup } from "../lib/lookups";
+import { DEFAULT_CURRENCY } from "../lib/format";
 import {
   Button,
   ErrorNote,
@@ -103,7 +104,7 @@ export default function LeadConvertModal({
           name: oppName.trim() || `${accountName} — New Business`,
           stage,
           amount: amount ? parseFloat(amount) : null,
-          currency: "USD",
+          currency: DEFAULT_CURRENCY,
           type: "new_business",
           owner_id: me,
           created_by_id: me,

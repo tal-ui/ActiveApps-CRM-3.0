@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Banknote,
   CalendarRange,
+  Calculator,
   LayoutDashboard,
   LayoutPanelLeft,
   LogOut,
@@ -52,6 +53,10 @@ export default function Layout() {
             <NavLink to="/monthly" className={navItemClass}>
               <CalendarRange size={16} strokeWidth={1.5} />
               Monthly Ops
+            </NavLink>
+            <NavLink to="/currency" className={navItemClass}>
+              <Calculator size={16} strokeWidth={1.5} />
+              Currency
             </NavLink>
             {NAV_OBJECTS.map((name) => {
               const def = OBJECTS[name];

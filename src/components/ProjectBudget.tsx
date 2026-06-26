@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Gauge, Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { fmtCurrency, fmtHours } from "../lib/format";
+import { DEFAULT_CURRENCY, fmtCurrency, fmtHours } from "../lib/format";
 import { Button } from "./ui";
 import InvoiceGenerator from "./InvoiceGenerator";
 
@@ -97,7 +97,7 @@ export default function ProjectBudget({
   }, [projectId, project]);
 
   if (!data) return null;
-  const currency = String(project.currency ?? "USD");
+  const currency = String(project.currency ?? DEFAULT_CURRENCY);
 
   return (
     <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5 mb-6">

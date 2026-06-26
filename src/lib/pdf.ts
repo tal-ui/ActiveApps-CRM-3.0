@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type RowInput } from "jspdf-autotable";
+import { DEFAULT_CURRENCY, fmtMoneyAscii } from "./format";
 
 export interface ReportEntry {
   date: number;
@@ -95,7 +96,7 @@ export async function generateMonthlyReport(opts: {
     { label: "NON-BILLABLE", value: nonBillable.toFixed(1) },
     {
       label: "BILLABLE VALUE",
-      value: `$${billableValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      value: fmtMoneyAscii(billableValue, DEFAULT_CURRENCY, 0),
     },
   ];
   const boxW = (pageWidth - margin * 2 - 3 * 10) / 4;
