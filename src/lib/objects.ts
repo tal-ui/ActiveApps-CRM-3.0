@@ -10,8 +10,16 @@ import {
   Package,
   Flag,
   ListOrdered,
+  Layers,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
+
+// Month picklist options ("01".."12" -> month names) for Monthly Summary.
+const MONTH_OPTIONS: PicklistOption[] = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+].map((label, i) => ({ value: String(i + 1).padStart(2, "0"), label }));
 
 export type FieldType =
   | "text"
@@ -130,6 +138,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { object: "opportunities", foreignKey: "account_id", columns: ["name", "stage", "amount", "close_date"] },
       { object: "projects", foreignKey: "account_id", columns: ["name", "status", "start_date", "budget_hours"] },
       { object: "invoices", foreignKey: "account_id", columns: ["invoice_number", "status", "total_amount", "due_date"] },
+      { object: "monthly_summaries", foreignKey: "account_id", title: "Monthly Summaries", columns: ["name", "status", "month", "year"] },
     ],
   },
 
@@ -238,6 +247,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "description", label: "Scope & Notes", type: "textarea", section: "Notes" },
     ],
     relatedLists: [
+      { object: "phases", foreignKey: "project_id", title: "Phases", columns: ["name", "phase_health", "sort_order", "start_date"] },
       { object: "tasks", foreignKey: "project_id", columns: ["name", "status", "priority", "due_date"] },
       { object: "milestones", foreignKey: "project_id", columns: ["name", "status", "due_date"] },
       { object: "time_entries", foreignKey: "project_id", columns: ["date", "duration", "is_billable", "description"] },
@@ -263,6 +273,33 @@ export const OBJECTS: Record<string, ObjectDef> = {
     ],
   },
 
+  // PMT Phase — a tier between projects and tasks. Roll-up columns
+  // (task_count, completed_task_count, end_date_rollup) and formula columns
+  // (phase_completion_pct, duration_days) are DB-maintained and intentionally
+  // not listed here so the form never tries to write them.
+  phases: {
+    name: "phases",
+    singular: "Phase",
+    plural: "Phases",
+    icon: Layers,
+    titleFields: ["name"],
+    highlightFields: ["project_id", "phase_health", "start_date"],
+    searchFields: ["name"],
+    ownerFields: ["owner_id", "created_by_id"],
+    fields: [
+      { name: "project_id", label: "Project", type: "lookup", lookup: "projects", required: true, section: "Phase", showInList: true },
+      { name: "name", label: "Phase Name", type: "text", required: true, section: "Phase", showInList: true },
+      { name: "phase_health", label: "Phase Health", type: "picklist", section: "Phase", options: opts("not_started", "on_track", "at_risk", "off_track", "complete"), showInList: true },
+      { name: "sort_order", label: "Sort Order", type: "number", defaultValue: 0, section: "Phase" },
+      { name: "start_date", label: "Start Date", type: "date", section: "Timeline", showInList: true },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Phase" },
+      { name: "phase_description", label: "Description", type: "textarea", section: "Notes" },
+    ],
+    relatedLists: [
+      { object: "tasks", foreignKey: "phase_id", columns: ["name", "status", "priority", "due_date"] },
+    ],
+  },
+
   tasks: {
     name: "tasks",
     singular: "Task",
@@ -277,6 +314,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "name", label: "Task Name", type: "text", required: true, section: "Task Information", showInList: true },
       { name: "project_id", label: "Project", type: "lookup", lookup: "projects", required: true, section: "Task Information", showInList: true },
       { name: "milestone_id", label: "Milestone", type: "lookup", lookup: "milestones", section: "Task Information" },
+      { name: "phase_id", label: "Phase", type: "lookup", lookup: "phases", section: "Task Information", showInList: true },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "todo", section: "Task Information", options: opts("todo", "in_progress", "in_review", "done", "blocked"), showInList: true },
       { name: "priority", label: "Priority", type: "picklist", section: "Task Information", options: opts("low", "medium", "high", "urgent"), showInList: true },
       { name: "due_date", label: "Due Date", type: "date", section: "Planning", showInList: true },
@@ -375,6 +413,56 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "description", label: "Description", type: "textarea", section: "Notes" },
     ],
   },
+
+  // Monthly Summary — master-detail of Account. sub_total / total_amount are
+  // DB GENERATED columns (rate * total_hrs, with discount) and are not listed
+  // here so the form never writes them.
+  monthly_summaries: {
+    name: "monthly_summaries",
+    singular: "Monthly Summary",
+    plural: "Monthly Summaries",
+    icon: Receipt,
+    titleFields: ["name"],
+    highlightFields: ["account_id", "status", "total_hrs", "rate"],
+    searchFields: ["name"],
+    inNav: true,
+    ownerFields: ["owner_id", "created_by_id"],
+    fields: [
+      { name: "account_id", label: "Customer", type: "lookup", lookup: "accounts", required: true, section: "Summary", showInList: true },
+      { name: "name", label: "Summary Name", type: "text", required: true, section: "Summary", showInList: true },
+      { name: "month", label: "Month", type: "picklist", section: "Period", options: MONTH_OPTIONS, showInList: true },
+      { name: "year", label: "Year", type: "text", section: "Period", showInList: true },
+      { name: "summary_date", label: "Date", type: "date", section: "Period" },
+      { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "draft", section: "Summary", options: opts("draft", "submitted", "approved", "invoiced", "paid"), showInList: true },
+      { name: "rate", label: "Rate", type: "currency", section: "Billing", showInList: true },
+      { name: "discount", label: "Discount (%)", type: "number", defaultValue: 0, section: "Billing" },
+      { name: "total_hrs", label: "Total Hours", type: "number", section: "Billing", showInList: true },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Billing" },
+    ],
+    relatedLists: [
+      { object: "monthly_line_items", foreignKey: "monthly_summary_id", title: "Line Items", columns: ["line_number", "project_id", "task_id"] },
+    ],
+  },
+
+  // Monthly Line Item — master-detail of Monthly Summary; lookups to Project
+  // and PMT Task. line_number is a DB auto-number; the Item / Status / dates /
+  // Working Hours formula fields are exposed by the v_monthly_line_items view.
+  monthly_line_items: {
+    name: "monthly_line_items",
+    singular: "Monthly Line Item",
+    plural: "Monthly Line Items",
+    icon: ListOrdered,
+    titleFields: ["line_number"],
+    highlightFields: ["monthly_summary_id", "project_id", "task_id"],
+    searchFields: [],
+    ownerFields: ["owner_id", "created_by_id"],
+    fields: [
+      { name: "monthly_summary_id", label: "Monthly Summary", type: "lookup", lookup: "monthly_summaries", required: true, section: "Line Item" },
+      { name: "project_id", label: "Project", type: "lookup", lookup: "projects", section: "Line Item", showInList: true },
+      { name: "task_id", label: "Project Task", type: "lookup", lookup: "tasks", section: "Line Item", showInList: true },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Line Item" },
+    ],
+  },
 };
 
 export const NAV_OBJECTS = [
@@ -386,6 +474,7 @@ export const NAV_OBJECTS = [
   "tasks",
   "time_entries",
   "invoices",
+  "monthly_summaries",
   "services",
 ];
 
