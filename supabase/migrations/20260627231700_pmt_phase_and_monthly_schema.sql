@@ -22,7 +22,7 @@
 -- 1) PMT Phase  ->  public.phases   (master-detail child of projects)
 -- ----------------------------------------------------------------------------
 create table if not exists public.phases (
-  id                   varchar primary key default (uuid_generate_v4())::text,
+  id                   varchar primary key default (extensions.uuid_generate_v4())::text,
   project_id           varchar not null references public.projects(id) on delete cascade,
   name                 varchar not null,
   phase_description    text,
@@ -170,7 +170,7 @@ for each row execute function public.phases_project_rollup_trg();
 -- 5) Monthly Summary  ->  public.monthly_summaries  (master-detail of accounts)
 -- ----------------------------------------------------------------------------
 create table if not exists public.monthly_summaries (
-  id            varchar primary key default (uuid_generate_v4())::text,
+  id            varchar primary key default (extensions.uuid_generate_v4())::text,
   account_id    varchar not null references public.accounts(id) on delete cascade,
   name          varchar not null,
   month         varchar check (month in
@@ -205,7 +205,7 @@ create index if not exists idx_monthly_summaries_account on public.monthly_summa
 create sequence if not exists public.monthly_line_item_seq;
 
 create table if not exists public.monthly_line_items (
-  id                 varchar primary key default (uuid_generate_v4())::text,
+  id                 varchar primary key default (extensions.uuid_generate_v4())::text,
   monthly_summary_id varchar not null references public.monthly_summaries(id) on delete cascade,
   project_id         varchar references public.projects(id) on delete set null,
   task_id            varchar references public.tasks(id) on delete set null,
