@@ -42,7 +42,10 @@ export function invalidateLookup(object: string) {
   delete cache[object];
 }
 
-export function useLookupOptions(object: string | undefined): LookupOption[] {
+export function useLookupOptions(
+  object: string | undefined,
+  refreshKey = 0,
+): LookupOption[] {
   const [options, setOptions] = useState<LookupOption[]>(
     object && cache[object] ? cache[object] : [],
   );
@@ -55,7 +58,7 @@ export function useLookupOptions(object: string | undefined): LookupOption[] {
     return () => {
       mounted = false;
     };
-  }, [object]);
+  }, [object, refreshKey]);
   return options;
 }
 

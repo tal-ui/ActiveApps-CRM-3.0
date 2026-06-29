@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS, type FieldDef } from "../lib/objects";
 import { dateToMs, msToDateInput } from "../lib/format";
@@ -33,16 +34,53 @@ function LookupSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const options = useLookupOptions(field.lookup);
+  // refreshKey forces the options to re-fetch after a quick-create.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showCreate, setShowCreate] = useState(false);
+  const options = useLookupOptions(field.lookup, refreshKey);
+  const targetDef = field.lookup ? OBJECTS[field.lookup] : undefined;
+
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">— Select —</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </Select>
+    <>
+      <div className="flex gap-2">
+        <Select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1"
+        >
+          <option value="">— Select —</option>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
+        {targetDef && (
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            title={`New ${targetDef.singular}`}
+            aria-label={`New ${targetDef.singular}`}
+            className="flex shrink-0 items-center justify-center w-10 rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--mint)] hover:bg-[var(--navy-surface)] cursor-pointer transition-colors"
+          >
+            <Plus size={16} strokeWidth={1.8} />
+          </button>
+        )}
+      </div>
+      {showCreate && field.lookup && (
+        <RecordForm
+          object={field.lookup}
+          record={null}
+          onClose={() => setShowCreate(false)}
+          onSaved={(id) => {
+            invalidateLookup(field.lookup!);
+            setRefreshKey((k) => k + 1);
+            onChange(id);
+            setShowCreate(false);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -64,7 +102,7 @@ export default function RecordForm({
   const isEdit = !!record;
 
   const formFields = useMemo(
-    () => def.fields.filter((f) => !f.hidden),
+    () => def.fields.filter((f) => !f.hidden && !f.readOnly),
     [def],
   );
 
