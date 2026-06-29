@@ -5,6 +5,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { badgeTone } from "../lib/objects";
 import { titleCase } from "../lib/format";
@@ -160,7 +161,10 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
-  return (
+  // Render to document.body so the fixed overlay isn't trapped by an ancestor
+  // that establishes a containing block for fixed elements (e.g. the header's
+  // backdrop-filter) — which would otherwise clip/mis-position the modal.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto"
       onMouseDown={(e) => {
@@ -186,7 +190,8 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
