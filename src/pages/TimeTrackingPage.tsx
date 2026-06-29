@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Download, Plus } from "lucide-react";
+import { Clock, Download, FileSpreadsheet, Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS } from "../lib/objects";
-import { useLookupMaps, useLookupOptions } from "../lib/lookups";
+import { invalidateLookup, useLookupMaps, useLookupOptions } from "../lib/lookups";
+import { useAuth } from "../lib/auth";
 import { fmtCurrency, fmtHours } from "../lib/format";
-import { Button, EmptyState, Input, Select, Spinner } from "../components/ui";
+import { Button, EmptyState, ErrorNote, Input, Select, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
 import RecordForm from "../components/RecordForm";
 
@@ -41,17 +42,45 @@ function monthBounds(month: string): { start: number; end: number; label: string
 export default function TimeTrackingPage() {
   const def = OBJECTS.time_entries;
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const [accountId, setAccountId] = useState("");
   const [month, setMonth] = useState(currentMonthInput());
-  const [projectId, setProjectId] = useState("");
   const [billableFilter, setBillableFilter] = useState<"all" | "billable" | "non">("all");
   const [rows, setRows] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [reload, setReload] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
 
-  const projects = useLookupOptions("projects");
+  const accounts = useLookupOptions("accounts");
   const lookupMaps = useLookupMaps(["projects", "tasks"]);
+
+  // project_id -> account_id, so entries can be filtered by account.
+  const [projectAccount, setProjectAccount] = useState<Record<string, string>>({});
+  useEffect(() => {
+    supabase
+      .from("projects")
+      .select("id,account_id")
+      .then(({ data }) => {
+        const m: Record<string, string> = {};
+        for (const p of (data ?? []) as { id: string; account_id: string }[]) {
+          m[p.id] = p.account_id;
+        }
+        setProjectAccount(m);
+      });
+  }, []);
+
+  const accountProjectIds = useMemo(
+    () =>
+      accountId
+        ? Object.entries(projectAccount)
+            .filter(([, a]) => a === accountId)
+            .map(([id]) => id)
+        : [],
+    [accountId, projectAccount],
+  );
 
   // Refresh when the global timer saves an entry
   useEffect(() => {
@@ -70,12 +99,15 @@ export default function TimeTrackingPage() {
       .lt("date", end)
       .order("date", { ascending: false })
       .limit(2000);
-    if (projectId) query = query.eq("project_id", projectId);
+    if (accountId) {
+      // no matching projects -> force empty result
+      query = query.in("project_id", accountProjectIds.length ? accountProjectIds : ["__none__"]);
+    }
     query.then(({ data }) => {
       setRows((data ?? []) as Entry[]);
       setLoading(false);
     });
-  }, [month, projectId, reload]);
+  }, [month, accountId, accountProjectIds, reload]);
 
   const filtered = useMemo(() => {
     if (billableFilter === "all") return rows;
@@ -114,29 +146,95 @@ export default function TimeTrackingPage() {
       .filter((f): f is NonNullable<typeof f> => !!f);
   }, [def]);
 
+  const accountName = accountId
+    ? (accounts.find((a) => a.value === accountId)?.label ?? "Account")
+    : "All Accounts";
+  const reportEntries = filtered.filter((r) => !r.is_running);
+
   async function exportPdf() {
     setExporting(true);
     const { generateMonthlyReport } = await import("../lib/pdf");
     const { label } = monthBounds(month);
-    const projectName = projectId
-      ? (projects.find((p) => p.value === projectId)?.label ?? "Project")
-      : "All Projects";
     await generateMonthlyReport({
       monthLabel: label,
-      projectFilter: projectName,
-      entries: filtered
-        .filter((r) => !r.is_running)
-        .map((r) => ({
-          date: Number(r.date),
-          duration: Number(r.duration ?? 0),
-          is_billable: r.is_billable,
-          hourly_rate: r.hourly_rate != null ? Number(r.hourly_rate) : null,
-          description: r.description,
-          project: lookupMaps.projects?.[r.project_id] ?? "Unknown project",
-          task: r.task_id ? (lookupMaps.tasks?.[r.task_id] ?? "") : "",
-        })),
+      projectFilter: accountName,
+      entries: reportEntries.map((r) => ({
+        date: Number(r.date),
+        duration: Number(r.duration ?? 0),
+        is_billable: r.is_billable,
+        hourly_rate: r.hourly_rate != null ? Number(r.hourly_rate) : null,
+        description: r.description,
+        project: lookupMaps.projects?.[r.project_id] ?? "Unknown project",
+        task: r.task_id ? (lookupMaps.tasks?.[r.task_id] ?? "") : "",
+      })),
     });
     setExporting(false);
+  }
+
+  // Generate the report as a Monthly Summary: create (or reuse) the summary for
+  // this account + month and link the report's time entries to it. The DB
+  // roll-up triggers then compute its total hours / sub-total / total amount.
+  async function generateSummary() {
+    if (!accountId || reportEntries.length === 0) return;
+    setError("");
+    setGenerating(true);
+    const [yStr, mStr] = month.split("-"); // YYYY, MM
+    const me = profile?.id ?? "system";
+    const { label } = monthBounds(month);
+
+    let summaryId: string;
+    const { data: existing } = await supabase
+      .from("monthly_summaries")
+      .select("id")
+      .eq("account_id", accountId)
+      .eq("month", mStr)
+      .eq("year", yStr)
+      .eq("is_deleted", false)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      summaryId = (existing[0] as { id: string }).id;
+    } else {
+      const now = Date.now();
+      const { data, error: insErr } = await supabase
+        .from("monthly_summaries")
+        .insert({
+          account_id: accountId,
+          name: `${accountName} — ${label}`,
+          month: mStr,
+          year: yStr,
+          status: "submitted",
+          discount: 0,
+          currency: "ILS",
+          owner_id: me,
+          created_by_id: me,
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id")
+        .single();
+      if (insErr || !data) {
+        setError(insErr?.message ?? "Could not create the monthly summary.");
+        setGenerating(false);
+        return;
+      }
+      summaryId = (data as { id: string }).id;
+    }
+
+    // Link the report's entries to the summary (triggers recompute totals).
+    const ids = reportEntries.map((r) => r.id);
+    const { error: updErr } = await supabase
+      .from("time_entries")
+      .update({ monthly_summary_id: summaryId, updated_at: Date.now() })
+      .in("id", ids);
+    if (updErr) {
+      setError(updErr.message);
+      setGenerating(false);
+      return;
+    }
+
+    invalidateLookup("monthly_summaries");
+    setGenerating(false);
+    navigate(`/monthly_summaries/${summaryId}`);
   }
 
   const stats = [
@@ -167,20 +265,55 @@ export default function TimeTrackingPage() {
           <Button
             variant="ghost"
             onClick={exportPdf}
-            disabled={exporting || filtered.length === 0}
+            disabled={exporting || reportEntries.length === 0}
           >
             <Download size={15} strokeWidth={1.5} />
             {exporting ? "Generating…" : "Export PDF"}
           </Button>
-          <Button onClick={() => setShowForm(true)}>
+          <Button variant="ghost" onClick={() => setShowForm(true)}>
             <Plus size={16} strokeWidth={2} />
             Log Time
+          </Button>
+          <Button
+            onClick={generateSummary}
+            disabled={generating || !accountId || reportEntries.length === 0}
+            title={
+              !accountId
+                ? "Select an account to generate a Monthly Summary"
+                : reportEntries.length === 0
+                  ? "No time entries to log"
+                  : "Log this report as a Monthly Summary"
+            }
+          >
+            <FileSpreadsheet size={15} strokeWidth={1.5} />
+            {generating ? "Logging…" : "Generate Monthly Summary"}
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
+      {error && (
+        <div className="mb-6">
+          <ErrorNote message={error} />
+        </div>
+      )}
+
+      {/* Filters: Account, then Month */}
       <div className="flex flex-wrap items-end gap-4 bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-4 mb-6">
+        <div>
+          <p className="label-mono mb-1.5">Account</p>
+          <Select
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className="w-60"
+          >
+            <option value="">All accounts</option>
+            {accounts.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label}
+              </option>
+            ))}
+          </Select>
+        </div>
         <div>
           <p className="label-mono mb-1.5">Month</p>
           <Input
@@ -189,21 +322,6 @@ export default function TimeTrackingPage() {
             onChange={(e) => setMonth(e.target.value)}
             className="w-44"
           />
-        </div>
-        <div>
-          <p className="label-mono mb-1.5">Project</p>
-          <Select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="w-56"
-          >
-            <option value="">All projects</option>
-            {projects.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
         </div>
         <div>
           <p className="label-mono mb-1.5">Billing</p>
