@@ -53,6 +53,7 @@ export default function TimeTrackingPage() {
   const [exporting, setExporting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [monthReady, setMonthReady] = useState(false);
 
   const accounts = useLookupOptions("accounts");
   const lookupMaps = useLookupMaps(["projects", "tasks"]);
@@ -89,7 +90,28 @@ export default function TimeTrackingPage() {
     return () => window.removeEventListener("time-entries-changed", handler);
   }, []);
 
+  // Entries may not fall in the current calendar month (e.g. right after the
+  // month rolls over — which happens earlier in UTC+ timezones). Land on the
+  // most recent month that actually has data so the page never looks empty
+  // when entries exist.
   useEffect(() => {
+    supabase
+      .from("time_entries")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        const latest = data?.[0]?.date as number | undefined;
+        if (latest) {
+          const d = new Date(Number(latest));
+          setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        }
+        setMonthReady(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!monthReady) return;
     setLoading(true);
     const { start, end } = monthBounds(month);
     let query = supabase
@@ -107,7 +129,7 @@ export default function TimeTrackingPage() {
       setRows((data ?? []) as Entry[]);
       setLoading(false);
     });
-  }, [month, accountId, accountProjectIds, reload]);
+  }, [month, accountId, accountProjectIds, reload, monthReady]);
 
   const filtered = useMemo(() => {
     if (billableFilter === "all") return rows;
