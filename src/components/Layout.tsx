@@ -1,11 +1,14 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Banknote,
   CalendarRange,
   Calculator,
+  Kanban,
   LayoutDashboard,
   LayoutPanelLeft,
   LogOut,
+  Search,
   Slack,
   SlidersHorizontal,
 } from "lucide-react";
@@ -13,10 +16,23 @@ import { NAV_OBJECTS, OBJECTS } from "../lib/objects";
 import { useAuth } from "../lib/auth";
 import TimerWidget from "./TimerWidget";
 import ThemeToggle from "./ThemeToggle";
+import CommandPalette from "./CommandPalette";
 
 export default function Layout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     isActive
@@ -45,6 +61,10 @@ export default function Layout() {
             <NavLink to="/" end className={navItemClass}>
               <LayoutDashboard size={16} strokeWidth={1.5} />
               Dashboard
+            </NavLink>
+            <NavLink to="/pipeline" className={navItemClass}>
+              <Kanban size={16} strokeWidth={1.5} />
+              Pipeline
             </NavLink>
             <NavLink to="/financial" className={navItemClass}>
               <Banknote size={16} strokeWidth={1.5} />
@@ -125,6 +145,15 @@ export default function Layout() {
               })}
             </span>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPaletteOpen(true)}
+                title="Search (Ctrl/⌘K)"
+                aria-label="Open command palette"
+                className="flex items-center gap-2 h-9 px-3 rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--mint)] hover:bg-[var(--navy-surface)] cursor-pointer transition-colors"
+              >
+                <Search size={15} strokeWidth={1.5} />
+                <span className="label-mono !text-inherit hidden md:inline">⌘K</span>
+              </button>
               <TimerWidget />
               <ThemeToggle />
             </div>
@@ -134,6 +163,8 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

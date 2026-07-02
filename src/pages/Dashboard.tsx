@@ -8,14 +8,16 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { useLookupMaps } from "../lib/lookups";
 import {
   fmtCurrency,
+  fmtDate,
   fmtDateTime,
   fmtHours,
   startOfMonthMs,
   titleCase,
 } from "../lib/format";
-import { Spinner } from "../components/ui";
+import { EmptyState, Spinner } from "../components/ui";
 
 interface Opp {
   stage: string;
@@ -29,6 +31,24 @@ interface RecentActivity {
   related_to_type: string;
   related_to_id: string;
 }
+interface PaidInvoice {
+  paid_date: number | null;
+  total_amount: number | string | null;
+}
+interface MyTask {
+  id: string;
+  name: string;
+  project_id: string;
+  due_date: number | null;
+}
+interface ClosingOpp {
+  id: string;
+  name: string;
+  account_id: string;
+  amount: number | string | null;
+  currency: string | null;
+  close_date: number | null;
+}
 
 const OPEN_STAGES = ["discovery", "qualification", "proposal", "negotiation"];
 
@@ -41,10 +61,17 @@ export default function Dashboard() {
   const [hoursMonth, setHoursMonth] = useState(0);
   const [billableMonth, setBillableMonth] = useState(0);
   const [recent, setRecent] = useState<RecentActivity[]>([]);
+  const [paidInvoices, setPaidInvoices] = useState<PaidInvoice[]>([]);
+  const [myTasks, setMyTasks] = useState<MyTask[]>([]);
+  const [closingOpps, setClosingOpps] = useState<ClosingOpp[]>([]);
+  const maps = useLookupMaps(["projects", "accounts"]);
 
   useEffect(() => {
     async function load() {
-      const [oppRes, leadRes, projRes, timeRes, actRes] = await Promise.all([
+      const now = new Date();
+      const revenueStart = new Date(now.getFullYear(), now.getMonth() - 5, 1).getTime();
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+      const [oppRes, leadRes, projRes, timeRes, actRes, paidRes, closingRes] = await Promise.all([
         supabase.from("opportunities").select("stage, amount"),
         supabase
           .from("leads")
@@ -63,6 +90,20 @@ export default function Dashboard() {
           .select("id, type, subject, date, related_to_type, related_to_id")
           .order("date", { ascending: false })
           .limit(8),
+        supabase
+          .from("invoices")
+          .select("paid_date, total_amount")
+          .eq("status", "paid")
+          .gte("paid_date", revenueStart)
+          .limit(2000),
+        supabase
+          .from("opportunities")
+          .select("id, name, account_id, amount, currency, close_date")
+          .not("stage", "in", "(closed_won,closed_lost)")
+          .gte("close_date", startOfMonthMs())
+          .lt("close_date", monthEnd)
+          .order("close_date", { ascending: true })
+          .limit(50),
       ]);
       setOpps((oppRes.data ?? []) as Opp[]);
       setOpenLeads(leadRes.count ?? 0);
@@ -78,10 +119,31 @@ export default function Dashboard() {
           .reduce((s, e) => s + Number(e.duration ?? 0), 0),
       );
       setRecent((actRes.data ?? []) as RecentActivity[]);
+      setPaidInvoices((paidRes.data ?? []) as PaidInvoice[]);
+      setClosingOpps((closingRes.data ?? []) as ClosingOpp[]);
       setLoading(false);
     }
     load();
   }, []);
+
+  useEffect(() => {
+    const uid = profile?.id;
+    if (!uid) return;
+    let mounted = true;
+    supabase
+      .from("tasks")
+      .select("id, name, project_id, due_date")
+      .or(`assignee_id.eq.${uid},owner_id.eq.${uid}`)
+      .in("status", ["todo", "in_progress", "in_review", "blocked"])
+      .order("due_date", { ascending: true })
+      .limit(8)
+      .then(({ data }) => {
+        if (mounted) setMyTasks((data ?? []) as MyTask[]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [profile?.id]);
 
   if (loading) return <Spinner />;
 
@@ -95,6 +157,23 @@ export default function Dashboard() {
     count: opps.filter((o) => o.stage === stage).length,
   }));
   const maxStage = Math.max(1, ...stageTotals.map((s) => s.total));
+
+  const nowDate = new Date();
+  const revMonths: { label: string; total: number }[] = [];
+  for (let m = 5; m >= 0; m--) {
+    const start = new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime();
+    const end = new Date(nowDate.getFullYear(), nowDate.getMonth() - m + 1, 1).getTime();
+    revMonths.push({
+      label: new Date(start).toLocaleDateString(undefined, { month: "short" }),
+      total: paidInvoices
+        .filter((i) => Number(i.paid_date ?? 0) >= start && Number(i.paid_date ?? 0) < end)
+        .reduce((s, i) => s + Number(i.total_amount ?? 0), 0),
+    });
+  }
+  const maxRevMonth = Math.max(1, ...revMonths.map((mo) => mo.total));
+  const revTotal = revMonths.reduce((s, mo) => s + mo.total, 0);
+  const closingTotal = closingOpps.reduce((s, o) => s + Number(o.amount ?? 0), 0);
+  const nowMs = Date.now();
 
   const firstName = (profile?.full_name ?? "").split(" ")[0] || "there";
 
@@ -228,6 +307,123 @@ export default function Dashboard() {
                   <span className="text-xs text-[var(--text-faint)] shrink-0">
                     {fmtDateTime(a.date)}
                   </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
+        {/* Revenue last 6 months */}
+        <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-6">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <h3 className="font-[var(--font-heading)] font-semibold text-[var(--foreground)]">
+              Revenue — Last 6 Months
+            </h3>
+            <span className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] shrink-0">
+              {fmtCurrency(revTotal)}
+            </span>
+          </div>
+          <div className="flex items-end gap-3 h-40">
+            {revMonths.map((mo) => (
+              <div key={mo.label} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                <div className="w-full flex items-end justify-center flex-1">
+                  <div
+                    className="w-1/2 rounded-t-sm transition-all duration-700"
+                    style={{
+                      height: `${Math.max(2, (mo.total / maxRevMonth) * 100)}%`,
+                      background: "var(--chart-1)",
+                    }}
+                    title={`${mo.label} · ${fmtCurrency(mo.total)}`}
+                  />
+                </div>
+                <span className="label-mono">{mo.label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* My open tasks */}
+        <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-6">
+          <h3 className="font-[var(--font-heading)] font-semibold text-[var(--foreground)] mb-5">
+            My Open Tasks
+          </h3>
+          {myTasks.length === 0 ? (
+            <EmptyState message="No open tasks assigned to you." />
+          ) : (
+            <ul className="space-y-3">
+              {myTasks.map((t) => (
+                <li
+                  key={t.id}
+                  className="border-b border-[rgba(255,255,255,0.04)] last:border-b-0 pb-3 last:pb-0"
+                >
+                  <Link
+                    to={`/tasks/${t.id}`}
+                    className="flex items-center justify-between gap-3 cursor-pointer group"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-[var(--text-light)] group-hover:text-[var(--mint)] transition-colors truncate">
+                        {t.name}
+                      </p>
+                      <span className="label-mono truncate block">
+                        {maps.projects?.[t.project_id] ?? "Project"}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-xs shrink-0 ${
+                        t.due_date !== null && Number(t.due_date) < nowMs
+                          ? "text-[#F2697A]"
+                          : "text-[var(--text-faint)]"
+                      }`}
+                    >
+                      {fmtDate(t.due_date)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Closing this month */}
+        <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-6">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <h3 className="font-[var(--font-heading)] font-semibold text-[var(--foreground)]">
+              Closing This Month
+            </h3>
+            <span className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] shrink-0">
+              {fmtCurrency(closingTotal)}
+            </span>
+          </div>
+          {closingOpps.length === 0 ? (
+            <EmptyState message="No opportunities closing this month." />
+          ) : (
+            <ul className="space-y-3">
+              {closingOpps.map((o) => (
+                <li
+                  key={o.id}
+                  className="border-b border-[rgba(255,255,255,0.04)] last:border-b-0 pb-3 last:pb-0"
+                >
+                  <Link
+                    to={`/opportunities/${o.id}`}
+                    className="flex items-center justify-between gap-3 cursor-pointer group"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-[var(--text-light)] group-hover:text-[var(--mint)] transition-colors truncate">
+                        {o.name}
+                      </p>
+                      <span className="label-mono truncate block">
+                        {maps.accounts?.[o.account_id] ?? "Account"}
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-[var(--font-mono)] text-xs text-[var(--text-light)]">
+                        {fmtCurrency(o.amount, o.currency ?? undefined)}
+                      </p>
+                      <p className="text-xs text-[var(--text-faint)]">{fmtDate(o.close_date)}</p>
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>

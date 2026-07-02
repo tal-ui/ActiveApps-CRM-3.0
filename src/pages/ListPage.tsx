@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus, Search, Wand2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Plus, Search, Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS } from "../lib/objects";
 import { useLookupMaps } from "../lib/lookups";
+import { downloadCsv } from "../lib/csv";
+import { msToDateInput } from "../lib/format";
 import { Button, EmptyState, Input, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
 import RecordForm from "../components/RecordForm";
@@ -131,6 +133,21 @@ export default function ListPage() {
               From Time Entries
             </Button>
           )}
+          <Button
+            variant="ghost"
+            disabled={filtered.length === 0}
+            onClick={() =>
+              downloadCsv(
+                `${object}-${msToDateInput(Date.now())}.csv`,
+                columns,
+                filtered,
+                lookupMaps,
+              )
+            }
+          >
+            <Download size={15} strokeWidth={1.5} />
+            Export CSV
+          </Button>
           <Button onClick={() => setShowForm(true)}>
             <Plus size={16} strokeWidth={2} />
             New {def.singular}

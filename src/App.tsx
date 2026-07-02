@@ -9,6 +9,7 @@ import TimeTrackingPage from "./pages/TimeTrackingPage";
 import CustomFieldsPage from "./pages/settings/CustomFieldsPage";
 import LayoutBuilderPage from "./pages/settings/LayoutBuilderPage";
 import FinancialDashboard from "./pages/FinancialDashboard";
+import PipelinePage from "./pages/PipelinePage";
 import MonthlyDashboard from "./pages/MonthlyDashboard";
 import CurrencyCalculator from "./pages/CurrencyCalculator";
 import SlackIntegrationPage from "./pages/settings/SlackIntegrationPage";
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/financial" element={<FinancialDashboard />} />
             <Route path="/monthly" element={<MonthlyDashboard />} />
             <Route path="/currency" element={<CurrencyCalculator />} />
+            <Route path="/pipeline" element={<PipelinePage />} />
             <Route path="/time_entries" element={<TimeTrackingPage />} />
             <Route path="/settings/custom-fields" element={<CustomFieldsPage />} />
             <Route path="/settings/layouts" element={<LayoutBuilderPage />} />

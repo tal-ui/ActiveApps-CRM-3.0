@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, FolderKanban, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS, recordTitle, type RelatedListDef } from "../lib/objects";
 import { invalidateLookup, useLookupMaps } from "../lib/lookups";
@@ -23,6 +23,7 @@ import RecordForm from "../components/RecordForm";
 import RelatedList from "../components/RelatedList";
 import ActivityTimeline from "../components/ActivityTimeline";
 import LeadConvertModal from "../components/LeadConvertModal";
+import OpportunityConvertModal from "../components/OpportunityConvertModal";
 import AccountInsights from "../components/AccountInsights";
 import ProjectBudget from "../components/ProjectBudget";
 import InvoiceActions from "../components/InvoiceActions";
@@ -48,6 +49,9 @@ export default function RecordPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
+  const [showProjectConvert, setShowProjectConvert] = useState(false);
+  const [linkedProjectId, setLinkedProjectId] = useState<string | null>(null);
+  const [projectChecked, setProjectChecked] = useState(false);
   const [reload, setReload] = useState(0);
 
   const { defs: customDefs } = useCustomFields(object);
@@ -86,6 +90,31 @@ export default function RecordPage() {
         setLoading(false);
       });
   }, [object, id, def, reload]);
+
+  // Linked project for won opportunities
+  const oppStage =
+    object === "opportunities" ? (record?.stage as string | undefined) : undefined;
+  useEffect(() => {
+    setLinkedProjectId(null);
+    setProjectChecked(false);
+    if (oppStage !== "closed_won") return;
+    let cancelled = false;
+    supabase
+      .from("projects")
+      .select("id")
+      .eq("opportunity_id", id)
+      .limit(1)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setLinkedProjectId(
+          data && data.length > 0 ? (data[0] as { id: string }).id : null,
+        );
+        setProjectChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, oppStage]);
 
   // Custom field values
   useEffect(() => {
@@ -238,6 +267,22 @@ export default function RecordPage() {
                 onChanged={() => setReload((r) => r + 1)}
               />
             )}
+            {oppStage === "closed_won" &&
+              projectChecked &&
+              (linkedProjectId ? (
+                <Button
+                  variant="subtle"
+                  onClick={() => navigate(`/projects/${linkedProjectId}`)}
+                >
+                  <FolderKanban size={15} strokeWidth={1.5} />
+                  View Project
+                </Button>
+              ) : (
+                <Button onClick={() => setShowProjectConvert(true)}>
+                  <FolderKanban size={15} strokeWidth={1.5} />
+                  Create Project
+                </Button>
+              ))}
             <Button variant="ghost" onClick={() => setShowEdit(true)}>
               <Pencil size={14} strokeWidth={1.5} />
               Edit
@@ -347,6 +392,16 @@ export default function RecordPage() {
           onConverted={(accountId) => {
             setShowConvert(false);
             navigate(`/accounts/${accountId}`);
+          }}
+        />
+      )}
+      {showProjectConvert && (
+        <OpportunityConvertModal
+          opportunity={record}
+          onClose={() => setShowProjectConvert(false)}
+          onConverted={(projectId) => {
+            setShowProjectConvert(false);
+            navigate(`/projects/${projectId}`);
           }}
         />
       )}
