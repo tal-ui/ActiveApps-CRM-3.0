@@ -95,7 +95,7 @@ export default function Layout() {
             })}
 
             <p className="label-mono !text-[var(--text-muted)] pt-5 pb-1 px-3">
-              Settings
+              Settings &amp; Setup
             </p>
             <NavLink to="/settings/custom-fields" className={navItemClass}>
               <SlidersHorizontal size={16} strokeWidth={1.5} />
@@ -112,9 +112,6 @@ export default function Layout() {
 
             {isAdmin && (
               <>
-                <p className="label-mono !text-[var(--text-muted)] pt-5 pb-1 px-3">
-                  Setup
-                </p>
                 <NavLink to="/settings/maintenance" className={navItemClass}>
                   <Wrench size={16} strokeWidth={1.5} />
                   Maintenance
