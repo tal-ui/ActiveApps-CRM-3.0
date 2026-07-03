@@ -195,6 +195,43 @@ export function Modal({
   );
 }
 
+/** Confirmation dialog over the portaled Modal, for bulk/destructive actions. */
+export function ConfirmModal({
+  title,
+  children,
+  confirmLabel = "Confirm",
+  destructive,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  confirmLabel?: string;
+  destructive?: boolean;
+  busy?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div className="text-sm text-[var(--text-mid)] space-y-3">{children}</div>
+      <div className="flex justify-end gap-3 mt-6">
+        <Button variant="subtle" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant={destructive ? "destructive" : "primary"}
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          {busy ? "Working…" : confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ---------- Misc ---------- */
 
 export function Spinner() {

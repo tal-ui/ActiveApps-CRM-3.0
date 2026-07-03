@@ -5,6 +5,8 @@ import { supabase } from "../lib/supabase";
 import { OBJECTS } from "../lib/objects";
 import { invalidateLookup, useLookupMaps, useLookupOptions } from "../lib/lookups";
 import { useAuth } from "../lib/auth";
+import { ensureMonthlySummary, linkEntriesToSummary } from "../lib/monthlySummary";
+import { insertAudit } from "../lib/audit";
 import { fmtCurrency, fmtHours } from "../lib/format";
 import { Button, EmptyState, ErrorNote, Input, Select, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
@@ -202,61 +204,37 @@ export default function TimeTrackingPage() {
     setGenerating(true);
     const [yStr, mStr] = month.split("-"); // YYYY, MM
     const me = profile?.id ?? "system";
-    const { label } = monthBounds(month);
 
-    let summaryId: string;
-    const { data: existing } = await supabase
-      .from("monthly_summaries")
-      .select("id")
-      .eq("account_id", accountId)
-      .eq("month", mStr)
-      .eq("year", yStr)
-      .eq("is_deleted", false)
-      .limit(1);
-    if (existing && existing.length > 0) {
-      summaryId = (existing[0] as { id: string }).id;
-    } else {
-      const now = Date.now();
-      const { data, error: insErr } = await supabase
-        .from("monthly_summaries")
-        .insert({
-          account_id: accountId,
-          name: `${accountName} — ${label}`,
-          month: mStr,
-          year: yStr,
-          status: "submitted",
-          discount: 0,
-          currency: "ILS",
-          owner_id: me,
-          created_by_id: me,
-          created_at: now,
-          updated_at: now,
-        })
-        .select("id")
-        .single();
-      if (insErr || !data) {
-        setError(insErr?.message ?? "Could not create the monthly summary.");
-        setGenerating(false);
-        return;
-      }
-      summaryId = (data as { id: string }).id;
-    }
-
-    // Link the report's entries to the summary (triggers recompute totals).
-    const ids = reportEntries.map((r) => r.id);
-    const { error: updErr } = await supabase
-      .from("time_entries")
-      .update({ monthly_summary_id: summaryId, updated_at: Date.now() })
-      .in("id", ids);
-    if (updErr) {
-      setError(updErr.message);
+    const res = await ensureMonthlySummary({
+      accountId,
+      accountName,
+      year: yStr,
+      month: mStr,
+      ownerId: me,
+    });
+    if (!res.id) {
+      setError(res.error ?? "Could not create the monthly summary.");
       setGenerating(false);
       return;
     }
-
+    const linkErr = await linkEntriesToSummary(
+      res.id,
+      reportEntries.map((r) => r.id),
+    );
+    if (linkErr) {
+      setError(linkErr);
+      setGenerating(false);
+      return;
+    }
+    void insertAudit(profile, {
+      action: "link_summary",
+      entity_type: "monthly_summary",
+      entity_id: res.id,
+      summary: `Generated monthly summary for ${accountName} (${month}) linking ${reportEntries.length} time entries`,
+    });
     invalidateLookup("monthly_summaries");
     setGenerating(false);
-    navigate(`/monthly_summaries/${summaryId}`);
+    navigate(`/monthly_summaries/${res.id}`);
   }
 
   const stats = [

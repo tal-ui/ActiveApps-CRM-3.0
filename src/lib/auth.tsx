@@ -19,6 +19,7 @@ interface AuthState {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthState>({
   session: null,
   profile: null,
   loading: true,
+  isAdmin: false,
   signOut: async () => {},
 });
 
@@ -71,8 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  // Invariant: while a session exists, `profile` is null ONLY during the
+  // fetch — the effect above always resolves to the DB row or the "member"
+  // fallback. RequireAdmin relies on this to avoid redirect flashes.
+  const isAdmin = profile?.role === "admin";
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, isAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );

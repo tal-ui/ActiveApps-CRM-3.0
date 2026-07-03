@@ -8,9 +8,14 @@ import {
   LayoutDashboard,
   LayoutPanelLeft,
   LogOut,
+  ScrollText,
   Search,
+  Settings2,
   Slack,
   SlidersHorizontal,
+  Users,
+  Webhook,
+  Wrench,
 } from "lucide-react";
 import { NAV_OBJECTS, OBJECTS } from "../lib/objects";
 import { useAuth } from "../lib/auth";
@@ -19,7 +24,7 @@ import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./CommandPalette";
 
 export default function Layout() {
-  const { profile, signOut } = useAuth();
+  const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -104,6 +109,34 @@ export default function Layout() {
               <Slack size={16} strokeWidth={1.5} />
               Slack
             </NavLink>
+
+            {isAdmin && (
+              <>
+                <p className="label-mono !text-[var(--text-muted)] pt-5 pb-1 px-3">
+                  Setup
+                </p>
+                <NavLink to="/settings/maintenance" className={navItemClass}>
+                  <Wrench size={16} strokeWidth={1.5} />
+                  Maintenance
+                </NavLink>
+                <NavLink to="/settings/users" className={navItemClass}>
+                  <Users size={16} strokeWidth={1.5} />
+                  Users & Roles
+                </NavLink>
+                <NavLink to="/settings/audit" className={navItemClass}>
+                  <ScrollText size={16} strokeWidth={1.5} />
+                  Audit Log
+                </NavLink>
+                <NavLink to="/settings/workspace" className={navItemClass}>
+                  <Settings2 size={16} strokeWidth={1.5} />
+                  Workspace
+                </NavLink>
+                <NavLink to="/settings/automations" className={navItemClass}>
+                  <Webhook size={16} strokeWidth={1.5} />
+                  Automations
+                </NavLink>
+              </>
+            )}
           </nav>
         </div>
 
