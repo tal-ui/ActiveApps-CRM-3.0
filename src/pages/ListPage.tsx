@@ -110,8 +110,8 @@ export default function ListPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-auto">
             <Search
               size={16}
               strokeWidth={1.5}
@@ -124,7 +124,7 @@ export default function ListPage() {
                 setPage(0);
               }}
               placeholder={`Search ${def.plural.toLowerCase()}…`}
-              className="pl-9 w-64"
+              className="pl-9 w-full"
             />
           </div>
           {object === "invoices" && (
@@ -184,7 +184,7 @@ export default function ListPage() {
             }}
           />
           {pageCount > 1 && (
-            <div className="flex items-center justify-end gap-3 mt-4">
+            <div className="flex flex-wrap items-center justify-end gap-3 mt-4">
               <span className="label-mono">
                 Page {page + 1} / {pageCount}
               </span>

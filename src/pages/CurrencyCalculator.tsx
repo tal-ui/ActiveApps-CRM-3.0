@@ -121,8 +121,8 @@ export default function CurrencyCalculator() {
 
         {/* Converter */}
         <div className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-6">
-          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-end">
+            <div className="min-w-0">
               <FieldLabel>From</FieldLabel>
               <Select value={from} onChange={(e) => setFrom(e.target.value)}>
                 {CURRENCIES.map((c) => (
@@ -137,11 +137,11 @@ export default function CurrencyCalculator() {
               onClick={swap}
               title="Swap currencies"
               aria-label="Swap currencies"
-              className="mb-1 flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--mint)] hover:bg-[var(--navy-surface)] cursor-pointer transition-colors"
+              className="mb-1 justify-self-center sm:justify-self-auto flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--mint)] hover:bg-[var(--navy-surface)] cursor-pointer transition-colors"
             >
               <ArrowLeftRight size={16} strokeWidth={1.5} />
             </button>
-            <div>
+            <div className="min-w-0">
               <FieldLabel>To</FieldLabel>
               <Select value={to} onChange={(e) => setTo(e.target.value)}>
                 {CURRENCIES.map((c) => (

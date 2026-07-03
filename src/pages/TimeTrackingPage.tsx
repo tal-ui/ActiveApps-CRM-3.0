@@ -261,7 +261,7 @@ export default function TimeTrackingPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="ghost"
             onClick={exportPdf}
@@ -299,7 +299,7 @@ export default function TimeTrackingPage() {
 
       {/* Filters: Account, then Month */}
       <div className="flex flex-wrap items-end gap-4 bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-4 mb-6">
-        <div>
+        <div className="w-full min-w-0 sm:w-auto">
           <p className="label-mono mb-1.5">Account</p>
           <Select
             value={accountId}
@@ -314,7 +314,7 @@ export default function TimeTrackingPage() {
             ))}
           </Select>
         </div>
-        <div>
+        <div className="w-full min-w-0 sm:w-auto">
           <p className="label-mono mb-1.5">Month</p>
           <Input
             type="month"
@@ -323,7 +323,7 @@ export default function TimeTrackingPage() {
             className="w-44"
           />
         </div>
-        <div>
+        <div className="w-full min-w-0 sm:w-auto">
           <p className="label-mono mb-1.5">Billing</p>
           <Select
             value={billableFilter}

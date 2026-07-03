@@ -205,7 +205,7 @@ export default function MaintenancePage() {
       ) : (
         <>
           {/* Severity summary */}
-          <div className="grid grid-cols-3 gap-5 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-6">
             {(
               [
                 ["critical", issueTotals.critical],
@@ -354,14 +354,14 @@ export default function MaintenancePage() {
             >
               <div className="space-y-1.5 text-sm">
                 {pastDue!.slice(0, 25).map((i) => (
-                  <div key={i.id} className="flex items-center gap-3">
+                  <div key={i.id} className="flex flex-wrap items-center gap-3">
                     <Link
                       to={`/invoices/${i.id}`}
                       className="text-[var(--mint)] hover:underline"
                     >
                       {i.invoice_number}
                     </Link>
-                    <span className="text-xs text-[var(--text-mid)]">{acctName(i.account_id)}</span>
+                    <span className="text-xs text-[var(--text-mid)] truncate">{acctName(i.account_id)}</span>
                     <span className="font-[var(--font-mono)] text-xs text-[var(--text-dim)]">
                       {fmtCurrency(i.total_amount)}
                     </span>
@@ -433,7 +433,7 @@ export default function MaintenancePage() {
                 {softDeleted!
                   .filter((t) => t.count > 0)
                   .map((t) => (
-                    <div key={t.table} className="flex items-center gap-3">
+                    <div key={t.table} className="flex flex-wrap items-center gap-3">
                       <span className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] w-40">
                         {t.table}
                       </span>

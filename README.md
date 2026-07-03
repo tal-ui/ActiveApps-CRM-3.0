@@ -60,3 +60,13 @@ npm run build   # outputs to dist/
 ## Deployment
 
 Pushes to `main` on [tal-ui/ActiveApps-CRM-3.0](https://github.com/tal-ui/ActiveApps-CRM-3.0) auto-deploy to production: **https://activeapps-crm-v3.vercel.app**
+
+## iOS app
+
+Install the CRM on an iPhone as a PWA:
+
+1. Open **https://activeapps-crm-v3.vercel.app** in **Safari**
+2. Tap **Share** (the square with the up arrow)
+3. Tap **Add to Home Screen**, then **Add**
+
+It launches full-screen ("AA CRM") like a native app. For App Store builds, a Capacitor iOS project lives in `ios/` — see [IOS.md](IOS.md) for build and submission instructions.

@@ -157,7 +157,7 @@ export default function FinancialDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
         {/* Invoiced vs collected by month */}
         <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-y-2 mb-5">
             <h3 className="font-[var(--font-heading)] font-semibold text-[var(--foreground)]">
               Invoiced vs Collected
             </h3>

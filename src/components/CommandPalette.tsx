@@ -202,7 +202,7 @@ export default function CommandPalette({
         }
       }}
     >
-      <div className="max-w-xl mt-[12vh] mx-auto bg-[var(--card)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-xl)] shadow-[0_0_60px_rgba(60,201,152,0.05)] overflow-hidden">
+      <div className="max-w-xl mt-[8vh] sm:mt-[12vh] mx-4 sm:mx-auto bg-[var(--card)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-xl)] shadow-[0_0_60px_rgba(60,201,152,0.05)] overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(255,255,255,0.08)]">
           <Search
             size={16}

@@ -172,7 +172,7 @@ export function Modal({
       }}
     >
       <div
-        className={`bg-[var(--card)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-xl)] p-7 mx-auto my-[8vh] shadow-[0_0_60px_rgba(60,201,152,0.05)] ${
+        className={`bg-[var(--card)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-xl)] p-7 mx-4 sm:mx-auto my-[4vh] sm:my-[8vh] shadow-[0_0_60px_rgba(60,201,152,0.05)] ${
           wide ? "max-w-3xl" : "max-w-xl"
         }`}
       >
@@ -182,7 +182,7 @@ export function Modal({
           </h2>
           <button
             onClick={onClose}
-            className="text-[var(--text-dim)] hover:text-[var(--foreground)] cursor-pointer transition-colors p-1"
+            className="text-[var(--text-dim)] hover:text-[var(--foreground)] cursor-pointer transition-colors p-1.5"
             aria-label="Close"
           >
             <X size={16} strokeWidth={1.5} />
