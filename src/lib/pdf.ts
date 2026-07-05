@@ -1,12 +1,10 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type RowInput } from "jspdf-autotable";
-import { DEFAULT_CURRENCY, fmtMoneyAscii } from "./format";
 
 export interface ReportEntry {
   date: number;
   duration: number;
   is_billable: boolean;
-  hourly_rate: number | null;
   description: string | null;
   project: string;
   task: string;
@@ -80,26 +78,19 @@ export async function generateMonthlyReport(opts: {
   doc.setTextColor(...GRAY);
   doc.text(`${monthLabel}  ·  ${projectFilter}`, margin, 118);
 
-  /* --- Summary boxes --- */
+  /* --- Summary boxes — labor hours only, no commercial numbers --- */
   const totalHours = entries.reduce((s, e) => s + e.duration, 0);
   const billableHours = entries
     .filter((e) => e.is_billable)
     .reduce((s, e) => s + e.duration, 0);
   const nonBillable = totalHours - billableHours;
-  const billableValue = entries
-    .filter((e) => e.is_billable)
-    .reduce((s, e) => s + e.duration * (e.hourly_rate ?? 0), 0);
 
   const boxes = [
     { label: "TOTAL HOURS", value: totalHours.toFixed(1) },
     { label: "BILLABLE", value: billableHours.toFixed(1) },
-    { label: "NON-BILLABLE", value: nonBillable.toFixed(1) },
-    {
-      label: "BILLABLE VALUE",
-      value: fmtMoneyAscii(billableValue, DEFAULT_CURRENCY, 0),
-    },
+    { label: "UNBILLED", value: nonBillable.toFixed(1) },
   ];
-  const boxW = (pageWidth - margin * 2 - 3 * 10) / 4;
+  const boxW = (pageWidth - margin * 2 - 2 * 10) / 3;
   boxes.forEach((b, i) => {
     const x = margin + i * (boxW + 10);
     doc.setFillColor(...LIGHT);
@@ -115,53 +106,87 @@ export async function generateMonthlyReport(opts: {
     doc.text(b.value, x + 10, 168);
   });
 
-  /* --- Detail table grouped by project --- */
-  const byProject = new Map<string, ReportEntry[]>();
-  for (const e of [...entries].sort((a, b) => a.date - b.date)) {
-    if (!byProject.has(e.project)) byProject.set(e.project, []);
-    byProject.get(e.project)!.push(e);
-  }
+  /* --- Two detail tables: billable items (main), then unbilled items.
+         Rows are auto-numbered from 1 per table and sorted by date
+         ascending; totals are labor hours only. --- */
+  const sorted = [...entries].sort((a, b) => a.date - b.date);
+  const billable = sorted.filter((e) => e.is_billable);
+  const unbilled = sorted.filter((e) => !e.is_billable);
 
-  const body: RowInput[] = [];
-  for (const [project, rows] of byProject.entries()) {
-    body.push([
-      {
-        content: project,
-        colSpan: 5,
-        styles: {
-          fillColor: NAVY,
-          textColor: MINT,
-          fontStyle: "bold",
-          fontSize: 9,
-        },
-      },
+  const HEAD = [
+    "Item #",
+    "Delivered / Completion Date",
+    "Subject",
+    "Description",
+    "Project",
+    "# of Hours",
+  ];
+
+  const itemRows = (list: ReportEntry[]): RowInput[] =>
+    list.map((e, i) => [
+      { content: String(i + 1), styles: { halign: "center" as const } },
+      fmtD(e.date),
+      e.task || "—",
+      e.description || "—",
+      e.project,
+      { content: e.duration.toFixed(2), styles: { halign: "right" as const } },
     ]);
-    for (const e of rows) {
-      body.push([
-        fmtD(e.date),
-        e.task || "—",
-        e.description || "—",
-        project,
-        { content: e.duration.toFixed(2), styles: { halign: "right" } },
-      ]);
+
+  const drawTable = (startY: number, body: RowInput[]) => {
+    autoTable(doc, {
+      startY,
+      margin: { left: margin, right: margin, bottom: 46 },
+      head: [HEAD],
+      body,
+      theme: "grid",
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 5,
+        textColor: [40, 44, 50],
+        lineColor: [225, 228, 232],
+        lineWidth: 0.5,
+      },
+      headStyles: {
+        fillColor: NAVY,
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8,
+      },
+      columnStyles: {
+        0: { cellWidth: 36, halign: "center" },
+        1: { cellWidth: 66 },
+        2: { cellWidth: 100 },
+        4: { cellWidth: 90 },
+        5: { cellWidth: 50, halign: "right" },
+      },
+    });
+    return (
+      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+        ?.finalY ?? startY
+    );
+  };
+
+  const pageHeightAll = doc.internal.pageSize.getHeight();
+  const sectionHeading = (y: number, title: string): number => {
+    // Keep the heading with its table — break the page if too close to the bottom
+    if (y + 64 > pageHeightAll - 46) {
+      doc.addPage();
+      y = 50;
     }
-    const subtotal = rows.reduce((s, e) => s + e.duration, 0);
-    body.push([
-      {
-        content: `Subtotal — ${project}`,
-        colSpan: 4,
-        styles: { fontStyle: "bold", halign: "right", fillColor: LIGHT },
-      },
-      {
-        content: subtotal.toFixed(2),
-        styles: { fontStyle: "bold", halign: "right", fillColor: LIGHT },
-      },
-    ]);
-  }
-  body.push([
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...NAVY);
+    doc.text(title, margin, y);
+    return y + 8;
+  };
+
+  /* Billable items — main table, ends with the billable hours total */
+  let y = sectionHeading(206, "Billable Items");
+  const billableBody = itemRows(billable);
+  billableBody.push([
     {
-      content: "TOTAL",
-      colSpan: 4,
+      content: "TOTAL HOURS",
+      colSpan: 5,
       styles: {
         fontStyle: "bold",
         halign: "right",
@@ -170,7 +195,7 @@ export async function generateMonthlyReport(opts: {
       },
     },
     {
-      content: totalHours.toFixed(2),
+      content: billableHours.toFixed(2),
       styles: {
         fontStyle: "bold",
         halign: "right",
@@ -179,33 +204,18 @@ export async function generateMonthlyReport(opts: {
       },
     },
   ]);
+  y = drawTable(y, billableBody);
 
-  autoTable(doc, {
-    startY: 198,
-    margin: { left: margin, right: margin, bottom: 46 },
-    head: [["Date", "Task", "Description", "Project", "Hours"]],
-    body,
-    theme: "grid",
-    styles: {
-      fontSize: 8.5,
-      cellPadding: 5,
-      textColor: [40, 44, 50],
-      lineColor: [225, 228, 232],
-      lineWidth: 0.5,
-    },
-    headStyles: {
-      fillColor: NAVY,
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      fontSize: 8,
-    },
-    columnStyles: {
-      0: { cellWidth: 52 },
-      1: { cellWidth: 110 },
-      3: { cellWidth: 95 },
-      4: { cellWidth: 48, halign: "right" },
-    },
-  });
+  /* Unbilled items */
+  y = sectionHeading(y + 26, "Unbilled Items");
+  if (unbilled.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...GRAY);
+    doc.text("No unbilled items this period.", margin, y + 12);
+  } else {
+    drawTable(y, itemRows(unbilled));
+  }
 
   /* --- Footer on every page --- */
   const pageCount = doc.getNumberOfPages();

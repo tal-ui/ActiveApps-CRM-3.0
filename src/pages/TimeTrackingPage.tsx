@@ -186,7 +186,6 @@ export default function TimeTrackingPage() {
         date: Number(r.date),
         duration: Number(r.duration ?? 0),
         is_billable: r.is_billable,
-        hourly_rate: r.hourly_rate != null ? Number(r.hourly_rate) : null,
         description: r.description,
         project: lookupMaps.projects?.[r.project_id] ?? "Unknown project",
         task: r.task_id ? (lookupMaps.tasks?.[r.task_id] ?? "") : "",
