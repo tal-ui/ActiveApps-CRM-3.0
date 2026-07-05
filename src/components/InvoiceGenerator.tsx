@@ -4,6 +4,7 @@ import { Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { invalidateLookup, useLookupOptions } from "../lib/lookups";
+import { nextInvoiceNumber } from "../lib/docNumber";
 import { dateToMs, DEFAULT_CURRENCY, fmtCurrency, fmtHours, msToDateInput } from "../lib/format";
 import {
   Button,
@@ -38,20 +39,6 @@ function startOfMonthInput(): string {
 }
 function todayInput(): string {
   return msToDateInput(Date.now());
-}
-
-async function nextInvoiceNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `INV-${year}-`;
-  const { data } = await supabase
-    .from("invoices")
-    .select("invoice_number")
-    .like("invoice_number", `${prefix}%`)
-    .order("invoice_number", { ascending: false })
-    .limit(1);
-  const last = (data ?? [])[0]?.invoice_number as string | undefined;
-  const seq = last ? parseInt(last.slice(prefix.length)) + 1 : 1;
-  return `${prefix}${String(seq).padStart(3, "0")}`;
 }
 
 export default function InvoiceGenerator({

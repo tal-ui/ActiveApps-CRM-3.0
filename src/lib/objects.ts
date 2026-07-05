@@ -7,6 +7,7 @@ import {
   CheckSquare,
   Clock,
   FileText,
+  FileCheck2,
   Package,
   ListOrdered,
   Receipt,
@@ -137,6 +138,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { object: "opportunities", foreignKey: "account_id", columns: ["name", "stage", "amount", "close_date"] },
       { object: "projects", foreignKey: "account_id", columns: ["name", "status", "start_date", "budget_hours"] },
       { object: "invoices", foreignKey: "account_id", columns: ["invoice_number", "status", "total_amount", "due_date"] },
+      { object: "quotes", foreignKey: "account_id", columns: ["quote_number", "status", "total_amount", "valid_until"] },
       { object: "monthly_summaries", foreignKey: "account_id", title: "Monthly Summaries", columns: ["name", "status", "month", "year"] },
     ],
   },
@@ -199,6 +201,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
     relatedLists: [
       { object: "opportunity_line_items", foreignKey: "opportunity_id", title: "Line Items", columns: ["service_id", "quantity", "unit_price", "total_price"] },
       { object: "projects", foreignKey: "opportunity_id", columns: ["name", "status", "start_date", "budget_amount"] },
+      { object: "quotes", foreignKey: "opportunity_id", columns: ["quote_number", "status", "total_amount", "valid_until"] },
     ],
   },
 
@@ -347,6 +350,53 @@ export const OBJECTS: Record<string, ObjectDef> = {
     ],
   },
 
+  quotes: {
+    name: "quotes",
+    singular: "Quote",
+    plural: "Quotes",
+    icon: FileCheck2,
+    titleFields: ["quote_number"],
+    highlightFields: ["account_id", "status", "total_amount", "valid_until"],
+    searchFields: ["quote_number"],
+    inNav: true,
+    ownerFields: ["owner_id", "created_by_id"],
+    fields: [
+      { name: "quote_number", label: "Quote #", type: "text", required: true, section: "Quote Information", showInList: true },
+      { name: "account_id", label: "Account", type: "lookup", lookup: "accounts", required: true, section: "Quote Information", showInList: true },
+      { name: "opportunity_id", label: "Opportunity", type: "lookup", lookup: "opportunities", section: "Quote Information" },
+      { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "draft", section: "Quote Information", options: opts("draft", "sent", "accepted", "declined", "expired"), showInList: true },
+      { name: "valid_until", label: "Valid Until", type: "date", section: "Dates", showInList: true },
+      { name: "subtotal", label: "Subtotal", type: "currency", defaultValue: 0, section: "Amounts" },
+      { name: "tax_rate", label: "Tax Rate (%)", type: "number", defaultValue: 0, section: "Amounts" },
+      { name: "tax_amount", label: "Tax Amount", type: "currency", defaultValue: 0, section: "Amounts" },
+      { name: "total_amount", label: "Total", type: "currency", defaultValue: 0, section: "Amounts", showInList: true },
+      { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Amounts" },
+      { name: "invoice_id", label: "Converted Invoice", type: "lookup", lookup: "invoices", readOnly: true, section: "Quote Information" },
+      { name: "notes", label: "Notes", type: "textarea", section: "Notes" },
+    ],
+    relatedLists: [
+      { object: "quote_line_items", foreignKey: "quote_id", title: "Line Items", columns: ["description", "quantity", "unit_price", "total_price"] },
+    ],
+  },
+
+  quote_line_items: {
+    name: "quote_line_items",
+    singular: "Quote Line",
+    plural: "Quote Lines",
+    icon: ListOrdered,
+    titleFields: ["description"],
+    highlightFields: ["quantity", "unit_price", "total_price"],
+    searchFields: ["description"],
+    fields: [
+      { name: "quote_id", label: "Quote", type: "lookup", lookup: "quotes", required: true, section: "Line" },
+      { name: "service_id", label: "Service", type: "lookup", lookup: "services", section: "Line" },
+      { name: "description", label: "Description", type: "text", section: "Line", showInList: true },
+      { name: "quantity", label: "Quantity", type: "number", required: true, defaultValue: 1, section: "Line", showInList: true },
+      { name: "unit_price", label: "Unit Price", type: "currency", required: true, section: "Line", showInList: true },
+      { name: "total_price", label: "Total", type: "currency", section: "Line", showInList: true },
+    ],
+  },
+
   services: {
     name: "services",
     singular: "Service",
@@ -408,6 +458,7 @@ export const NAV_OBJECTS = [
   "tasks",
   "time_entries",
   "invoices",
+  "quotes",
   "monthly_summaries",
   "services",
 ];
@@ -426,9 +477,9 @@ export function recordTitle(def: ObjectDef, record: Record<string, unknown>): st
 
 // Badge tone mapping for picklist values
 export function badgeTone(value: string): "mint" | "neutral" | "warn" | "danger" {
-  const mint = ["active", "customer", "qualified", "closed_won", "done", "completed", "paid", "hot", "in_progress"];
-  const danger = ["churned", "closed_lost", "unqualified", "blocked", "overdue", "cancelled", "urgent"];
-  const warn = ["on_hold", "negotiation", "in_review", "warm", "high", "sent", "contacted"];
+  const mint = ["active", "customer", "qualified", "closed_won", "done", "completed", "paid", "hot", "in_progress", "accepted"];
+  const danger = ["churned", "closed_lost", "unqualified", "blocked", "overdue", "cancelled", "urgent", "declined"];
+  const warn = ["on_hold", "negotiation", "in_review", "warm", "high", "sent", "contacted", "expired"];
   if (mint.includes(value)) return "mint";
   if (danger.includes(value)) return "danger";
   if (warn.includes(value)) return "warn";

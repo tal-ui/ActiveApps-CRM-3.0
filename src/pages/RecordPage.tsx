@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FolderKanban, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, FileCheck2, FolderKanban, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS, recordTitle, type RelatedListDef } from "../lib/objects";
 import { invalidateLookup, useLookupMaps } from "../lib/lookups";
@@ -27,6 +27,14 @@ import OpportunityConvertModal from "../components/OpportunityConvertModal";
 import AccountInsights from "../components/AccountInsights";
 import ProjectBudget from "../components/ProjectBudget";
 import InvoiceActions from "../components/InvoiceActions";
+import QuoteActions from "../components/QuoteActions";
+import QuoteCreateModal from "../components/QuoteCreateModal";
+import AttachmentsPanel from "../components/AttachmentsPanel";
+import AiInsightPanel from "../components/AiInsightPanel";
+
+// Objects that support file attachments / AI insight
+const ATTACHABLE = ["accounts", "opportunities", "projects", "invoices", "quotes"];
+const AI_OBJECTS = ["accounts", "opportunities", "projects"] as const;
 
 interface RenderItem {
   key: string;
@@ -50,6 +58,7 @@ export default function RecordPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   const [showProjectConvert, setShowProjectConvert] = useState(false);
+  const [showQuoteCreate, setShowQuoteCreate] = useState(false);
   const [linkedProjectId, setLinkedProjectId] = useState<string | null>(null);
   const [projectChecked, setProjectChecked] = useState(false);
   const [reload, setReload] = useState(0);
@@ -267,6 +276,18 @@ export default function RecordPage() {
                 onChanged={() => setReload((r) => r + 1)}
               />
             )}
+            {object === "quotes" && (
+              <QuoteActions
+                quote={record}
+                onChanged={() => setReload((r) => r + 1)}
+              />
+            )}
+            {object === "opportunities" && (
+              <Button variant="ghost" onClick={() => setShowQuoteCreate(true)}>
+                <FileCheck2 size={15} strokeWidth={1.5} />
+                Create Quote
+              </Button>
+            )}
             {oppStage === "closed_won" &&
               projectChecked &&
               (linkedProjectId ? (
@@ -311,6 +332,14 @@ export default function RecordPage() {
       {/* Object-specific insight widgets (Sprint 5) */}
       {object === "accounts" && <AccountInsights accountId={id} />}
       {object === "projects" && <ProjectBudget project={record} />}
+      {(AI_OBJECTS as readonly string[]).includes(object) && (
+        <div className="mb-6">
+          <AiInsightPanel
+            objectType={object as (typeof AI_OBJECTS)[number]}
+            recordId={id}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* Field sections (layout-driven) */}
@@ -355,6 +384,13 @@ export default function RecordPage() {
         </div>
       )}
 
+      {/* File attachments */}
+      {ATTACHABLE.includes(object) && (
+        <div className="mt-6">
+          <AttachmentsPanel entityType={object} entityId={id} />
+        </div>
+      )}
+
       {/* Modals */}
       {showEdit && (
         <RecordForm
@@ -392,6 +428,16 @@ export default function RecordPage() {
           onConverted={(accountId) => {
             setShowConvert(false);
             navigate(`/accounts/${accountId}`);
+          }}
+        />
+      )}
+      {showQuoteCreate && (
+        <QuoteCreateModal
+          opportunity={record}
+          onClose={() => setShowQuoteCreate(false)}
+          onCreated={(quoteId) => {
+            setShowQuoteCreate(false);
+            navigate(`/quotes/${quoteId}`);
           }}
         />
       )}

@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Download, Plus, Search, Wand2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Kanban, Plus, Search, Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { OBJECTS } from "../lib/objects";
 import { useLookupMaps } from "../lib/lookups";
 import { downloadCsv } from "../lib/csv";
-import { msToDateInput } from "../lib/format";
+import { dateToMs, msToDateInput } from "../lib/format";
 import { Button, EmptyState, Input, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
 import RecordForm from "../components/RecordForm";
 import InvoiceGenerator from "../components/InvoiceGenerator";
+import FilterBar, { type ListFilter } from "../components/FilterBar";
+import SavedViewsBar from "../components/SavedViewsBar";
 
 const PAGE_SIZE = 25;
 
@@ -21,6 +23,7 @@ export default function ListPage() {
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<ListFilter[]>([]);
   const [sortField, setSortField] = useState("updated_at");
   const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(0);
@@ -46,6 +49,10 @@ export default function ListPage() {
   const lookupMaps = useLookupMaps(lookupObjects);
 
   useEffect(() => {
+    setFilters([]);
+  }, [object]);
+
+  useEffect(() => {
     if (!def) return;
     setLoading(true);
     setPage(0);
@@ -62,9 +69,26 @@ export default function ListPage() {
 
   const filtered = useMemo(() => {
     let out = rows;
+    for (const f of filters) {
+      const fieldDef = def?.fields.find((fd) => fd.name === f.field);
+      out = out.filter((r) => {
+        if (f.op === "eq") {
+          if (fieldDef?.type === "boolean") {
+            return Boolean(r[f.field]) === (f.value === "true");
+          }
+          return String(r[f.field] ?? "") === (f.value ?? "");
+        }
+        const v = Number(r[f.field]);
+        const fromMs = f.from ? dateToMs(f.from) : null;
+        const toMs = f.to ? dateToMs(f.to) : null;
+        if (fromMs != null && !(v >= fromMs)) return false;
+        if (toMs != null && !(v <= toMs + 86399999)) return false;
+        return true;
+      });
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
-      out = rows.filter((r) =>
+      out = out.filter((r) =>
         def.searchFields.some((f) =>
           String(r[f] ?? "").toLowerCase().includes(q),
         ),
@@ -83,7 +107,7 @@ export default function ListPage() {
       return sortAsc ? cmp : -cmp;
     });
     return out;
-  }, [rows, search, sortField, sortAsc, def]);
+  }, [rows, search, filters, sortField, sortAsc, def]);
 
   if (!def) {
     return <EmptyState message={`Unknown object: ${object}`} />;
@@ -127,6 +151,20 @@ export default function ListPage() {
               className="pl-9 w-full"
             />
           </div>
+          <FilterBar
+            def={def}
+            filters={filters}
+            onChange={(f) => {
+              setFilters(f);
+              setPage(0);
+            }}
+          />
+          {object === "tasks" && (
+            <Button variant="ghost" onClick={() => navigate("/tasks/board")}>
+              <Kanban size={15} strokeWidth={1.5} />
+              Board
+            </Button>
+          )}
           {object === "invoices" && (
             <Button variant="ghost" onClick={() => setShowGenerator(true)}>
               <Wand2 size={15} strokeWidth={1.5} />
@@ -155,6 +193,24 @@ export default function ListPage() {
         </div>
       </div>
 
+      <SavedViewsBar
+        key={object}
+        object={object}
+        filters={filters}
+        sortField={sortField}
+        sortAsc={sortAsc}
+        onApply={(c) => {
+          setFilters(c.filters);
+          setSortField(c.sortField);
+          setSortAsc(c.sortAsc);
+          setPage(0);
+        }}
+        onClear={() => {
+          setFilters([]);
+          setPage(0);
+        }}
+      />
+
       {/* Table */}
       {loading ? (
         <Spinner />
@@ -163,7 +219,9 @@ export default function ListPage() {
           message={
             search
               ? "No records match your search."
-              : `No ${def.plural.toLowerCase()} yet. Create the first one.`
+              : filters.length > 0
+                ? "No records match your filters."
+                : `No ${def.plural.toLowerCase()} yet. Create the first one.`
           }
         />
       ) : (

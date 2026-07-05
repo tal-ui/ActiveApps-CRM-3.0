@@ -196,7 +196,7 @@ export default function RecordForm({
     }
 
     // Auto-compute line item totals
-    if (object === "opportunity_line_items" || object === "invoice_line_items") {
+    if (object === "opportunity_line_items" || object === "invoice_line_items" || object === "quote_line_items") {
       const qty = Number(payload.quantity ?? 0);
       const price = Number(payload.unit_price ?? 0);
       const discount = Number(payload.discount ?? 0);
@@ -205,8 +205,8 @@ export default function RecordForm({
       }
     }
 
-    // invoice_line_items has no updated_at column in the schema
-    if (object !== "invoice_line_items") payload.updated_at = Date.now();
+    // invoice_line_items and quote_line_items have no updated_at column in the schema
+    if (object !== "invoice_line_items" && object !== "quote_line_items") payload.updated_at = Date.now();
     if (!isEdit) {
       payload.created_at = Date.now();
       for (const ownerField of def.ownerFields ?? []) {
