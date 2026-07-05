@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { Play, Square, Timer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Play, Plus, Square, Timer } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { useLookupOptions } from "../lib/lookups";
+import { invalidateLookup, useLookupOptions } from "../lib/lookups";
+import RecordForm from "./RecordForm";
 import {
   Button,
   ErrorNote,
@@ -42,6 +43,11 @@ export function notifyTimeEntriesChanged() {
 
 /* ---------- Start modal ---------- */
 
+interface ProjectOption {
+  id: string;
+  name: string;
+}
+
 function StartTimerModal({
   onClose,
   onStarted,
@@ -50,18 +56,74 @@ function StartTimerModal({
   onStarted: (entry: RunningEntry) => void;
 }) {
   const { profile } = useAuth();
-  const projects = useLookupOptions("projects");
+  const accounts = useLookupOptions("accounts");
+  const [accountId, setAccountId] = useState("");
   const [projectId, setProjectId] = useState("");
+  // null while no client is selected or a fetch is in flight
+  const [openProjects, setOpenProjects] = useState<ProjectOption[] | null>(null);
+  const [reload, setReload] = useState(0);
+  // Project id to select once the list refetches (set by quick-create)
+  const pendingSelect = useRef<string | null>(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Default to the most recently updated project
+  // Load the selected client's open projects — closed (completed/cancelled)
+  // projects never enter the LOV. Defaults to the most recently updated one.
   useEffect(() => {
-    if (!projectId && projects.length > 0) setProjectId(projects[0].value);
-  }, [projects, projectId]);
+    if (!accountId) {
+      setOpenProjects(null);
+      setProjectId("");
+      return;
+    }
+    let cancelled = false;
+    setOpenProjects(null);
+    supabase
+      .from("projects")
+      .select("id, name")
+      .eq("account_id", accountId)
+      .not("status", "in", "(completed,cancelled)")
+      .order("updated_at", { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = (data ?? []) as ProjectOption[];
+        setOpenProjects(list);
+        const wanted = pendingSelect.current;
+        pendingSelect.current = null;
+        setProjectId(
+          wanted && list.some((p) => p.id === wanted)
+            ? wanted
+            : (list[0]?.id ?? ""),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, reload]);
+
+  async function projectCreated(id: string) {
+    setShowCreateProject(false);
+    invalidateLookup("projects");
+    // The user may have picked a different client inside the form — follow
+    // the created project's account so the cascade stays consistent.
+    const { data } = await supabase
+      .from("projects")
+      .select("id, account_id")
+      .eq("id", id)
+      .maybeSingle();
+    const acc = data?.account_id ? String(data.account_id) : "";
+    pendingSelect.current = id;
+    if (acc && acc !== accountId) setAccountId(acc);
+    else setReload((r) => r + 1);
+  }
 
   async function start() {
+    if (!accountId) {
+      setError("Select a client first.");
+      return;
+    }
     if (!projectId) {
       setError("Select a project to track time against.");
       return;
@@ -97,15 +159,56 @@ function StartTimerModal({
       <div className="space-y-4">
         {error && <ErrorNote message={error} />}
         <div>
-          <FieldLabel required>Project</FieldLabel>
-          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">— Select project —</option>
-            {projects.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
+          <FieldLabel required>Client</FieldLabel>
+          <Select
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            <option value="">— Select client —</option>
+            {accounts.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label}
               </option>
             ))}
           </Select>
+        </div>
+        <div>
+          <FieldLabel required>Project</FieldLabel>
+          <div className="flex gap-2">
+            <Select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              disabled={!accountId}
+              className="flex-1"
+            >
+              <option value="">
+                {!accountId
+                  ? "— Select client first —"
+                  : openProjects === null
+                    ? "Loading…"
+                    : "— Select project —"}
+              </option>
+              {(openProjects ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+            <button
+              type="button"
+              onClick={() => setShowCreateProject(true)}
+              title="New Project"
+              aria-label="New Project"
+              className="flex shrink-0 items-center justify-center w-10 rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--mint)] hover:bg-[var(--navy-surface)] cursor-pointer transition-colors"
+            >
+              <Plus size={16} strokeWidth={1.8} />
+            </button>
+          </div>
+          {accountId && openProjects && openProjects.length === 0 && (
+            <p className="text-xs text-[var(--text-faint)] mt-1.5">
+              No open projects for this client — create one with the + button.
+            </p>
+          )}
         </div>
         <div>
           <FieldLabel>What are you working on?</FieldLabel>
@@ -126,6 +229,15 @@ function StartTimerModal({
           </Button>
         </div>
       </div>
+      {showCreateProject && (
+        <RecordForm
+          object="projects"
+          record={null}
+          prefill={accountId ? { account_id: accountId } : undefined}
+          onClose={() => setShowCreateProject(false)}
+          onSaved={projectCreated}
+        />
+      )}
     </Modal>
   );
 }
