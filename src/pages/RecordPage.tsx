@@ -379,7 +379,12 @@ export default function RecordPage() {
       {relatedLists.length > 0 && (
         <div className="mt-6 space-y-6">
           {relatedLists.map((rl) => (
-            <RelatedList key={rl.object + rl.foreignKey} def={rl} parentId={id} />
+            <RelatedList
+              key={rl.object + rl.foreignKey}
+              def={rl}
+              parentId={id}
+              onChanged={() => setReload((r) => r + 1)}
+            />
           ))}
         </div>
       )}

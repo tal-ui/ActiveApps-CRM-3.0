@@ -366,10 +366,11 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "opportunity_id", label: "Opportunity", type: "lookup", lookup: "opportunities", section: "Quote Information" },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "draft", section: "Quote Information", options: opts("draft", "sent", "accepted", "declined", "expired"), showInList: true },
       { name: "valid_until", label: "Valid Until", type: "date", section: "Dates", showInList: true },
-      { name: "subtotal", label: "Subtotal", type: "currency", defaultValue: 0, section: "Amounts" },
+      // Formula fields — DB rolls subtotal up from line items; tax/total are generated columns
+      { name: "subtotal", label: "Subtotal", type: "currency", readOnly: true, section: "Amounts" },
       { name: "tax_rate", label: "Tax Rate (%)", type: "number", defaultValue: 0, section: "Amounts" },
-      { name: "tax_amount", label: "Tax Amount", type: "currency", defaultValue: 0, section: "Amounts" },
-      { name: "total_amount", label: "Total", type: "currency", defaultValue: 0, section: "Amounts", showInList: true },
+      { name: "tax_amount", label: "Tax Amount", type: "currency", readOnly: true, section: "Amounts" },
+      { name: "total_amount", label: "Total", type: "currency", readOnly: true, section: "Amounts", showInList: true },
       { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Amounts" },
       { name: "invoice_id", label: "Converted Invoice", type: "lookup", lookup: "invoices", readOnly: true, section: "Quote Information" },
       { name: "notes", label: "Notes", type: "textarea", section: "Notes" },
@@ -393,7 +394,8 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "description", label: "Description", type: "text", section: "Line", showInList: true },
       { name: "quantity", label: "Quantity", type: "number", required: true, defaultValue: 1, section: "Line", showInList: true },
       { name: "unit_price", label: "Unit Price", type: "currency", required: true, section: "Line", showInList: true },
-      { name: "total_price", label: "Total", type: "currency", section: "Line", showInList: true },
+      // Formula field — DB computes quantity × unit price
+      { name: "total_price", label: "Total", type: "currency", readOnly: true, section: "Line", showInList: true },
     ],
   },
 

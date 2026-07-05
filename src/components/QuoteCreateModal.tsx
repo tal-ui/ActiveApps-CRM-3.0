@@ -119,10 +119,9 @@ export default function QuoteCreateModal({
         opportunity_id: opportunity.id,
         status: "draft",
         valid_until: dateToMs(validUntil),
-        subtotal: totals.subtotal,
+        // subtotal/tax_amount/total_amount are DB formulas — subtotal rolls up
+        // from the line items inserted below; tax/total are generated columns.
         tax_rate: totals.rate,
-        tax_amount: totals.taxAmount,
-        total_amount: totals.total,
         currency,
         notes: notes.trim() || null,
         owner_id: me,

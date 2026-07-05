@@ -11,9 +11,13 @@ import RecordForm from "./RecordForm";
 export default function RelatedList({
   def,
   parentId,
+  onChanged,
 }: {
   def: RelatedListDef;
   parentId: string;
+  // Notifies the parent page after a child record is saved — needed when DB
+  // triggers roll child values up into the parent (e.g. quote totals).
+  onChanged?: () => void;
 }) {
   const childDef = OBJECTS[def.object];
   const navigate = useNavigate();
@@ -92,6 +96,7 @@ export default function RelatedList({
           onSaved={() => {
             setShowForm(false);
             setReload((r) => r + 1);
+            onChanged?.();
           }}
         />
       )}
