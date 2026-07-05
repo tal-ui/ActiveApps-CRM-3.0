@@ -43,6 +43,10 @@ export const AUDIT_ACTIONS = [
   "mark_overdue",
   "restore",
   "link_summary",
+  "upload",
+  "delete",
+  "convert",
+  "status_change",
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [
@@ -53,4 +57,7 @@ export const AUDIT_ENTITY_TYPES = [
   "time_entry",
   "invoice",
   "monthly_summary",
+  "attachment",
+  "quote",
+  "integration",
 ] as const;

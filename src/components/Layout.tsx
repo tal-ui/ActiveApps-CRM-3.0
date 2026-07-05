@@ -23,6 +23,7 @@ import { useAuth } from "../lib/auth";
 import TimerWidget from "./TimerWidget";
 import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./CommandPalette";
+import NotificationsBell from "./NotificationsBell";
 
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth();
@@ -100,7 +101,7 @@ export default function Layout() {
               </span>
             </div>
           </div>
-          <p className="label-mono text-[var(--text-muted)] mb-7 ml-[38px]">CRM 3.0</p>
+          <p className="label-mono text-[var(--text-muted)] mb-7 ml-[38px]">CRM 3.2</p>
 
           <nav className="space-y-1" onClick={() => setDrawerOpen(false)}>
             <NavLink to="/" end className={navItemClass}>
@@ -263,6 +264,7 @@ export default function Layout() {
                 <Search size={15} strokeWidth={1.5} />
                 <span className="label-mono !text-inherit hidden md:inline">⌘K</span>
               </button>
+              <NotificationsBell />
               <TimerWidget />
               <ThemeToggle />
             </div>
