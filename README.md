@@ -21,6 +21,12 @@ Salesforce-inspired CRM for ActiveApps, built with React + Vite + Tailwind on Su
 - **Invoice generation** (Sprint 5) — generate an invoice from a project's unbilled billable time entries (date-range scoped, line items grouped by task, entries marked as billed), draft → sent → paid status flow, and a branded invoice PDF download
 - **Account & project insights** (Sprint 5) — account records show pipeline/projects/invoiced/collected/outstanding; project records show budget vs actual bars (hours and value) with one-click invoicing of unbilled hours
 - **Slack integration** (Sprint 6) — Settings → Slack. Automatic Block Kit notifications fired by database triggers (new lead, opportunity stage change, deal won/lost, invoice overdue/paid, task assigned) with per-event toggles and channel routing; hourly cron flags 8h+ running timers and flips overdue invoices; `/crm` slash commands (search, pipeline, my-tasks, log, timer start/stop, report) served by signing-secret-verified Supabase Edge Functions (`slack-notify`, `slack-commands`)
+- **Quotes** (3.2) — quote builder from an opportunity (lines prefilled from deal line items), draft → sent → accepted/declined flow, branded quote PDF, and one-click quote → invoice conversion
+- **File attachments** (3.2) — upload, download (signed URLs) and delete files on account, deal, project, invoice and quote records
+- **In-app notifications** (3.2) — header bell with unread badge and feed (new lead, deal won/lost, invoice overdue/paid, task assigned), fed by exception-safe database triggers
+- **Saved views** (3.2) — field-level filters on every list page plus named per-user views with a default that auto-applies; CSV export respects active filters
+- **Task board** (3.2) — tasks-by-status kanban at /tasks/board with drag & drop, sharing a generic board component with the pipeline
+- **Claude AI assistant** (3.2) — "AI Insight" on account, deal and project records (summary, risks, next actions via the `ai-assist` Edge Function and claude-sonnet-5); zero external calls until an Anthropic API key is added in Settings → Workspace
 - **Pipeline Kanban** (3.1) — drag-and-drop opportunities between stages with per-column deal counts and totals; dropping into closed won/lost stamps the actual close date (and reopening clears it)
 - **Command palette** (3.1) — ⌘K / Ctrl+K global search across all records plus jump-to-page navigation, fully keyboard-driven
 - **CSV export** (3.1) — every list view exports its current filtered/sorted rows (lookup labels resolved, Excel-safe)
