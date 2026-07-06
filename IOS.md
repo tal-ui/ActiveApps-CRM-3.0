@@ -35,16 +35,48 @@ ready out of the box:
 
 ### Build & run (requires macOS + Xcode 15+)
 
+First time on a Mac — run these in Terminal, in order:
+
 ```bash
+# 0. Node.js v20+ is required — if this prints "command not found" or v18
+#    or older, install the LTS from https://nodejs.org (or: brew install node)
+node -v
+
+# 1. Get the project and enter its folder (everything below runs from there)
+git clone https://github.com/tal-ui/ActiveApps-CRM-3.0.git
+cd ActiveApps-CRM-3.0
+
+# 2. Install dependencies (includes the Capacitor CLI)
 npm install
-npm run build          # builds the web app into dist/
-npx cap sync ios       # copies dist/ + plugin packages into the native project
-npx cap open ios       # opens ios/App in Xcode
+```
+
+Then, for every build:
+
+```bash
+npm run ios:sync       # builds the web app + syncs it into ios/
+npm run ios:open       # opens ios/App in Xcode
 ```
 
 In Xcode: select the **App** target → *Signing & Capabilities* → choose your
 Apple Developer team (automatic signing, bundle id `com.activeapps.crm`) →
 pick a simulator or plugged-in iPhone → **Run**.
+
+### Troubleshooting
+
+**`npm error could not determine executable to run`** — npx couldn't find the
+Capacitor CLI. One of three causes:
+
+1. **Wrong folder** — the commands must run from the cloned repo root. Check
+   with `ls package.json`; if it says "No such file", `cd` into the
+   `ActiveApps-CRM-3.0` folder you cloned (or clone it first, step 1 above).
+2. **Dependencies not installed** — run `npm install` in that folder and wait
+   for it to finish without errors.
+3. **Node too old** — `node -v` must show v20+. Upgrade via nodejs.org or
+   `brew install node`, then delete `node_modules` and re-run `npm install`.
+
+The `npm run ios:*` scripts above check for the CLI and print a clear message
+instead of the cryptic npx error. Explicit fallback if you ever need it:
+`npx @capacitor/cli@8 sync ios` / `npx @capacitor/cli@8 open ios`.
 
 ### Step 1 — TestFlight (first distribution)
 
@@ -93,7 +125,7 @@ In App Store Connect, complete the app page and submit the same build:
 The shell bundles a snapshot of `dist/` — after web changes:
 
 ```bash
-npm run build && npx cap sync ios
+npm run ios:sync
 ```
 
 then bump the **build number** (App target → General; marketing version only

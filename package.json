@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ios:check": "node -e \"require.resolve('@capacitor/cli/package.json')\" 2>/dev/null || (echo '>> Capacitor CLI not found. Run this from the ActiveApps-CRM-3.0 folder, after: npm install' && exit 1)",
+    "preios:sync": "npm run ios:check",
+    "ios:sync": "npm run build && cap sync ios",
+    "preios:open": "npm run ios:check",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@capacitor/core": "^8.4.1",
