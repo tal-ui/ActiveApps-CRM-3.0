@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { OBJECTS, type FieldDef } from "../lib/objects";
+import { OBJECTS, recordTitle, type FieldDef } from "../lib/objects";
 import { dateToMs, msToDateInput } from "../lib/format";
-import { invalidateLookup, useLookupOptions } from "../lib/lookups";
+import { invalidateLookup, useLookupOptions, type LookupOption } from "../lib/lookups";
 import { useAuth } from "../lib/auth";
 import {
   fetchValueRows,
@@ -28,17 +28,57 @@ import {
 function LookupSelect({
   field,
   value,
+  parentValue,
   onChange,
 }: {
   field: FieldDef;
   value: string;
+  // Value of the field this lookup dependsOn (when the descriptor is set)
+  parentValue?: string;
   onChange: (v: string) => void;
 }) {
   // refreshKey forces the options to re-fetch after a quick-create.
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
-  const options = useLookupOptions(field.lookup, refreshKey);
+  const cached = useLookupOptions(field.lookup, refreshKey);
+  const [filtered, setFiltered] = useState<LookupOption[] | null>(null);
   const targetDef = field.lookup ? OBJECTS[field.lookup] : undefined;
+
+  // Dependent lookup: scope options to rows matching the parent field's value
+  // (e.g. only the selected account's open projects).
+  useEffect(() => {
+    const dep = field.dependsOn;
+    if (!dep || !parentValue || !field.lookup || !targetDef) {
+      setFiltered(null);
+      return;
+    }
+    let cancelled = false;
+    const cols = ["id", ...targetDef.titleFields.filter((t) => t !== "id")].join(",");
+    let q = supabase.from(field.lookup).select(cols).eq(dep.column, parentValue);
+    if (dep.exclude) {
+      q = q.not(dep.exclude.column, "in", `(${dep.exclude.values.join(",")})`);
+    }
+    q.order("updated_at", { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = (data ?? []) as unknown as Record<string, unknown>[];
+        setFiltered(
+          rows.map((r) => ({ value: String(r.id), label: recordTitle(targetDef, r) })),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [field, parentValue, targetDef, refreshKey]);
+
+  const scoped = field.dependsOn && parentValue ? (filtered ?? []) : cached;
+  // Keep the current selection visible even when the filter excludes it
+  // (e.g. editing an old task whose project has since been completed).
+  const options =
+    value && !scoped.some((o) => o.value === value)
+      ? [...scoped, ...cached.filter((o) => o.value === value)]
+      : scoped;
 
   return (
     <>
@@ -71,6 +111,11 @@ function LookupSelect({
         <RecordForm
           object={field.lookup}
           record={null}
+          prefill={
+            field.dependsOn && parentValue
+              ? { [field.dependsOn.column]: parentValue }
+              : undefined
+          }
           onClose={() => setShowCreate(false)}
           onSaved={(id) => {
             invalidateLookup(field.lookup!);
@@ -122,6 +167,32 @@ export default function RecordForm({
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Reverse-fill dependent-lookup parents that arrived empty — e.g. "Add
+  // Task" from a Project record prefills project_id, so auto-populate
+  // account_id from that project. Runs once with the initial values.
+  useEffect(() => {
+    for (const f of formFields) {
+      const dep = f.dependsOn;
+      const child = values[f.name];
+      if (!dep || !child || values[dep.field] || !f.lookup) continue;
+      supabase
+        .from(f.lookup)
+        .select(dep.column)
+        .eq("id", String(child))
+        .maybeSingle()
+        .then(({ data }) => {
+          const pv = (data as unknown as Record<string, unknown> | null)?.[dep.column];
+          if (pv != null) {
+            setValues((prev) =>
+              prev[dep.field] ? prev : { ...prev, [dep.field]: String(pv) },
+            );
+          }
+        });
+    }
+    // mount-time backfill only — later changes are handled in onChange
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Custom fields (EAV)
   const { defs: customDefs } = useCustomFields(object);
@@ -301,7 +372,32 @@ export default function RecordForm({
                 <LookupSelect
                   field={f}
                   value={String(values[f.name] ?? "")}
-                  onChange={(v) => set(f.name, v)}
+                  parentValue={
+                    f.dependsOn ? String(values[f.dependsOn.field] ?? "") : undefined
+                  }
+                  onChange={(v) => {
+                    set(f.name, v);
+                    // User changed a parent field — reset its dependents
+                    for (const other of formFields) {
+                      if (other.dependsOn?.field === f.name && values[other.name]) {
+                        set(other.name, "");
+                      }
+                    }
+                    // Dependent picked while its parent is empty — fill the
+                    // parent from the chosen row (e.g. project → account)
+                    const dep = f.dependsOn;
+                    if (dep && v && !values[dep.field] && f.lookup) {
+                      supabase
+                        .from(f.lookup)
+                        .select(dep.column)
+                        .eq("id", v)
+                        .maybeSingle()
+                        .then(({ data }) => {
+                          const pv = (data as unknown as Record<string, unknown> | null)?.[dep.column];
+                          if (pv != null) set(dep.field, String(pv));
+                        });
+                    }
+                  }}
                 />
               ) : f.type === "boolean" ? (
                 <div className="pt-1.5">

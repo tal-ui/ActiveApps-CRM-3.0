@@ -50,6 +50,15 @@ export interface FieldDef {
   hidden?: boolean; // never shown in forms or detail
   readOnly?: boolean; // shown on the record, but not editable (DB-computed)
   defaultValue?: string | number | boolean;
+  // Dependent lookup: options are filtered to rows whose `column` equals the
+  // value of the sibling form field `field` (when set); `exclude` removes
+  // rows by value (e.g. closed projects). Picking a value while the parent
+  // field is empty reverse-fills the parent from the chosen row.
+  dependsOn?: {
+    field: string;
+    column: string;
+    exclude?: { column: string; values: string[] };
+  };
 }
 
 export interface RelatedListDef {
@@ -137,6 +146,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { object: "contacts", foreignKey: "account_id", columns: ["first_name", "last_name", "email", "title"] },
       { object: "opportunities", foreignKey: "account_id", columns: ["name", "stage", "amount", "close_date"] },
       { object: "projects", foreignKey: "account_id", columns: ["name", "status", "start_date", "budget_hours"] },
+      { object: "tasks", foreignKey: "account_id", columns: ["name", "status", "priority", "due_date"] },
       { object: "invoices", foreignKey: "account_id", columns: ["invoice_number", "status", "total_amount", "due_date"] },
       { object: "quotes", foreignKey: "account_id", columns: ["quote_number", "status", "total_amount", "valid_until"] },
       { object: "monthly_summaries", foreignKey: "account_id", title: "Monthly Summaries", columns: ["name", "status", "month", "year"] },
@@ -267,7 +277,11 @@ export const OBJECTS: Record<string, ObjectDef> = {
     ownerFields: ["owner_id", "created_by_id"],
     fields: [
       { name: "name", label: "Task Name", type: "text", required: true, section: "Task Information", showInList: true },
-      { name: "project_id", label: "Project", type: "lookup", lookup: "projects", required: true, section: "Task Information", showInList: true },
+      { name: "account_id", label: "Account", type: "lookup", lookup: "accounts", section: "Task Information", showInList: true },
+      // Master-detail: required + DB NOT NULL + ON DELETE CASCADE. Options are
+      // scoped to the selected account's open projects; the DB keeps account_id
+      // synced to the project's account.
+      { name: "project_id", label: "Project", type: "lookup", lookup: "projects", required: true, section: "Task Information", showInList: true, dependsOn: { field: "account_id", column: "account_id", exclude: { column: "status", values: ["completed", "cancelled"] } } },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "todo", section: "Task Information", options: opts("todo", "in_progress", "in_review", "done", "blocked"), showInList: true },
       { name: "priority", label: "Priority", type: "picklist", section: "Task Information", options: opts("low", "medium", "high", "urgent"), showInList: true },
       { name: "due_date", label: "Due Date", type: "date", section: "Planning", showInList: true },
