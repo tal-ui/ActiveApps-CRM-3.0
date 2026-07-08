@@ -4,13 +4,13 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { invalidateLookup, useLookupOptions } from "../lib/lookups";
 import RecordForm from "./RecordForm";
+import SearchableSelect from "./SearchableSelect";
 import {
   Button,
   ErrorNote,
   FieldLabel,
   Input,
   Modal,
-  Select,
   Textarea,
   Toggle,
 } from "./ui";
@@ -160,40 +160,33 @@ function StartTimerModal({
         {error && <ErrorNote message={error} />}
         <div>
           <FieldLabel required>Client</FieldLabel>
-          <Select
+          <SearchableSelect
+            options={accounts}
             value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-          >
-            <option value="">— Select client —</option>
-            {accounts.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
-            ))}
-          </Select>
+            onChange={setAccountId}
+            placeholder="Search clients…"
+          />
         </div>
         <div>
           <FieldLabel required>Project</FieldLabel>
           <div className="flex gap-2">
-            <Select
+            <SearchableSelect
+              options={(openProjects ?? []).map((p) => ({
+                value: p.id,
+                label: p.name,
+              }))}
               value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
+              onChange={setProjectId}
               disabled={!accountId}
-              className="flex-1"
-            >
-              <option value="">
-                {!accountId
+              placeholder={
+                !accountId
                   ? "— Select client first —"
                   : openProjects === null
                     ? "Loading…"
-                    : "— Select project —"}
-              </option>
-              {(openProjects ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
+                    : "Search projects…"
+              }
+              className="flex-1 min-w-0"
+            />
             <button
               type="button"
               onClick={() => setShowCreateProject(true)}
@@ -387,19 +380,16 @@ function StopTimerModal({
 
         <div>
           <FieldLabel required>Project</FieldLabel>
-          <Select
+          <SearchableSelect
+            options={projects}
             value={projectId}
-            onChange={(e) => {
-              setProjectId(e.target.value);
+            onChange={(v) => {
+              setProjectId(v);
               setTaskId("");
             }}
-          >
-            {projects.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
+            allowClear={false}
+            placeholder="Search projects…"
+          />
         </div>
 
         {/* Task association */}
@@ -411,14 +401,12 @@ function StopTimerModal({
             {segBtn("new", "Quick-Create")}
           </div>
           {taskMode === "existing" && (
-            <Select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-              <option value="">— Select task —</option>
-              {tasks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={tasks.map((t) => ({ value: t.id, label: t.name }))}
+              value={taskId}
+              onChange={setTaskId}
+              placeholder="Search tasks…"
+            />
           )}
           {taskMode === "new" && (
             <Input

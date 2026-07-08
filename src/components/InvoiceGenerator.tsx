@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { invalidateLookup, useLookupOptions } from "../lib/lookups";
 import { nextInvoiceNumber } from "../lib/docNumber";
 import { dateToMs, DEFAULT_CURRENCY, fmtCurrency, fmtHours, msToDateInput } from "../lib/format";
+import SearchableSelect from "./SearchableSelect";
 import {
   Button,
   EmptyState,
@@ -13,7 +14,6 @@ import {
   FieldLabel,
   Input,
   Modal,
-  Select,
   Spinner,
 } from "./ui";
 
@@ -218,14 +218,12 @@ export default function InvoiceGenerator({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <FieldLabel required>Project</FieldLabel>
-            <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">— Select project —</option>
-              {projects.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={projects}
+              value={projectId}
+              onChange={setProjectId}
+              placeholder="Search projects…"
+            />
           </div>
           <div>
             <FieldLabel>From</FieldLabel>

@@ -14,6 +14,7 @@ import {
   type CfInput,
 } from "../lib/customFields";
 import { CustomFieldInput } from "./customFields";
+import SearchableSelect from "./SearchableSelect";
 import {
   Button,
   ErrorNote,
@@ -83,18 +84,15 @@ function LookupSelect({
   return (
     <>
       <div className="flex gap-2">
-        <Select
+        <SearchableSelect
+          options={options}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1"
-        >
-          <option value="">— Select —</option>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
+          onChange={onChange}
+          placeholder={
+            targetDef ? `Search ${targetDef.plural.toLowerCase()}…` : "— Select —"
+          }
+          className="flex-1 min-w-0"
+        />
         {targetDef && (
           <button
             type="button"
