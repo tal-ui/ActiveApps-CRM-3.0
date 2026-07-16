@@ -129,6 +129,63 @@ async function profileForSlackUser(
   return await adminProfileId();
 }
 
+// Summarize the Slack message into a short task title with Claude. Uses the
+// same stored Anthropic key as the in-app AI insights (integrations row
+// key = "anthropic"); returns null when the key isn't configured, the call
+// fails, or it exceeds the timeout — Slack's modal trigger_id is only valid
+// for ~3s, so we cap the call at 2s and fall back to the message's first line.
+async function summarizeTitle(messageText: string): Promise<string | null> {
+  const text = messageText.trim();
+  if (!text) return null;
+  const { data } = await supabase
+    .from("integrations")
+    .select("connected, config")
+    .eq("key", "anthropic")
+    .maybeSingle();
+  if (!data || data.connected !== true) return null;
+  const apiKey = (data.config as { api_key?: unknown } | null)?.api_key;
+  if (typeof apiKey !== "string" || apiKey.length === 0) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2000);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 60,
+        thinking: { type: "disabled" },
+        system:
+          "Summarize the user's Slack message into a short, actionable task " +
+          "title of at most 10 words. Reply with the title only — no quotes, " +
+          "no punctuation at the end, no explanation.",
+        messages: [{ role: "user", content: text.slice(0, 2000) }],
+      }),
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as {
+      content?: { type: string; text?: string }[];
+    };
+    const raw = j.content?.find((b) => b.type === "text")?.text ?? "";
+    const title = raw
+      .split("\n")[0]
+      .trim()
+      .replace(/^["'“”]+|["'“”]+$/g, "")
+      .slice(0, 250);
+    return title || null;
+  } catch {
+    return null; // timeout / network / parse — fall back to first line
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function projectOptions(): Promise<
   { text: { type: string; text: string }; value: string }[]
 > {
@@ -153,8 +210,10 @@ function buildModal(
   privateMetadata: string,
   messageText: string,
   projects: { text: { type: string; text: string }; value: string }[],
+  initialName?: string | null,
 ) {
-  const firstLine = (messageText.split("\n")[0] || "Task from Slack").slice(0, 250);
+  const firstLine =
+    initialName || (messageText.split("\n")[0] || "Task from Slack").slice(0, 250);
   return {
     type: "modal",
     callback_id: MODAL_CALLBACK,
@@ -237,22 +296,28 @@ async function handleMessageAction(
   const slackUserId = payload.user?.id ?? "";
   const triggerId = payload.trigger_id;
 
-  // Permalink back to the original message (best effort).
-  let permalink = "";
-  if (channelId && messageTs) {
-    const r = await slack(cfg, "chat.getPermalink", {
-      channel: channelId,
-      message_ts: messageTs,
-    });
-    if (r.ok) permalink = String(r.permalink ?? "");
-  }
+  // Run the pre-modal work in parallel — the trigger_id expires ~3s after
+  // the shortcut fires, and the AI title alone may take up to 2s.
+  const [permalink, projects, aiTitle] = await Promise.all([
+    // Permalink back to the original message (best effort).
+    (async () => {
+      if (!channelId || !messageTs) return "";
+      const r = await slack(cfg, "chat.getPermalink", {
+        channel: channelId,
+        message_ts: messageTs,
+      });
+      return r.ok ? String(r.permalink ?? "") : "";
+    })(),
+    projectOptions(),
+    summarizeTitle(messageText),
+  ]);
 
-  const projects = await projectOptions();
   const view = projects.length
     ? buildModal(
         JSON.stringify({ channelId, messageTs, slackUserId, permalink, messageText }),
         messageText,
         projects,
+        aiTitle,
       )
     : noProjectsModal();
 

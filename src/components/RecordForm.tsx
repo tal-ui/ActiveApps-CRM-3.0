@@ -192,6 +192,79 @@ export default function RecordForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // New Time Entry from a Task record: default the whole form from the
+  // related task. Only empty fields are filled — prefills/user input win.
+  useEffect(() => {
+    if (isEdit || object !== "time_entries") return;
+    setValues((prev) =>
+      prev.date ? prev : { ...prev, date: msToDateInput(Date.now()) },
+    );
+    const taskId = values.task_id;
+    if (!taskId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("tasks")
+        .select("project_id, account_id, name, estimated_hours")
+        .eq("id", String(taskId))
+        .maybeSingle();
+      if (cancelled || !data) return;
+      const task = data as unknown as {
+        project_id: string | null;
+        account_id: string | null;
+        name: string | null;
+        estimated_hours: number | string | null;
+      };
+      setValues((prev) => ({
+        ...prev,
+        project_id: prev.project_id || String(task.project_id ?? ""),
+        description: prev.description || String(task.name ?? ""),
+        duration:
+          prev.duration ||
+          (task.estimated_hours != null ? String(task.estimated_hours) : ""),
+      }));
+
+      // Suggest the account's current-month summary, else its most recent.
+      // Never auto-create a summary from a form open.
+      if (!task.account_id) return;
+      const nowDate = new Date();
+      const year = String(nowDate.getFullYear());
+      const month = String(nowDate.getMonth() + 1).padStart(2, "0");
+      let summaryId = "";
+      const { data: cur } = await supabase
+        .from("monthly_summaries")
+        .select("id")
+        .eq("account_id", task.account_id)
+        .eq("year", year)
+        .eq("month", month)
+        .limit(1)
+        .maybeSingle();
+      if (cur?.id) {
+        summaryId = String(cur.id);
+      } else {
+        const { data: latest } = await supabase
+          .from("monthly_summaries")
+          .select("id")
+          .eq("account_id", task.account_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latest?.id) summaryId = String(latest.id);
+      }
+      if (cancelled || !summaryId) return;
+      setValues((prev) =>
+        prev.monthly_summary_id
+          ? prev
+          : { ...prev, monthly_summary_id: summaryId },
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // mount-time prefill only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Custom fields (EAV)
   const { defs: customDefs } = useCustomFields(object);
   const [cfInputs, setCfInputs] = useState<Record<string, CfInput>>({});
