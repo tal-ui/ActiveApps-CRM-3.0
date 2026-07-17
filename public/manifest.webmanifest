@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0C121A",
-  "theme_color": "#0C121A",
+  "background_color": "#0E1624",
+  "theme_color": "#0E1624",
   "description": "ActiveApps CRM — leads, pipeline, projects, time tracking, and invoicing in one place.",
   "icons": [
     {

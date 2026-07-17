@@ -332,18 +332,12 @@ export default function RecordPage() {
       {/* Object-specific insight widgets (Sprint 5) */}
       {object === "accounts" && <AccountInsights accountId={id} />}
       {object === "projects" && <ProjectBudget project={record} />}
-      {(AI_OBJECTS as readonly string[]).includes(object) && (
-        <div className="mb-6">
-          <AiInsightPanel
-            objectType={object as (typeof AI_OBJECTS)[number]}
-            recordId={id}
-          />
-        </div>
-      )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        {/* Field sections (layout-driven) */}
+      {/* Main + rail composition: record data and its children on the left,
+          supporting panels (AI insight, activity, files) in the right rail */}
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 xl:items-start">
         <div className="xl:col-span-3 space-y-6">
+          {/* Field sections (layout-driven) */}
           {sections.map((section) => (
             <section
               key={section.title}
@@ -365,19 +359,8 @@ export default function RecordPage() {
               </div>
             </section>
           ))}
-        </div>
 
-        {/* Activity */}
-        <div className="xl:col-span-2">
-          {def.activityType && (
-            <ActivityTimeline relatedToType={def.activityType} relatedToId={id} />
-          )}
-        </div>
-      </div>
-
-      {/* Related lists */}
-      {relatedLists.length > 0 && (
-        <div className="mt-6 space-y-6">
+          {/* Related lists */}
           {relatedLists.map((rl) => (
             <RelatedList
               key={rl.object + rl.foreignKey}
@@ -387,14 +370,23 @@ export default function RecordPage() {
             />
           ))}
         </div>
-      )}
 
-      {/* File attachments */}
-      {ATTACHABLE.includes(object) && (
-        <div className="mt-6">
-          <AttachmentsPanel entityType={object} entityId={id} />
+        {/* Right rail */}
+        <div className="xl:col-span-2 space-y-6">
+          {(AI_OBJECTS as readonly string[]).includes(object) && (
+            <AiInsightPanel
+              objectType={object as (typeof AI_OBJECTS)[number]}
+              recordId={id}
+            />
+          )}
+          {def.activityType && (
+            <ActivityTimeline relatedToType={def.activityType} relatedToId={id} />
+          )}
+          {ATTACHABLE.includes(object) && (
+            <AttachmentsPanel entityType={object} entityId={id} />
+          )}
         </div>
-      )}
+      </div>
 
       {/* Modals */}
       {showEdit && (

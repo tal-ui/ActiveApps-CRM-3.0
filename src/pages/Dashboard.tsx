@@ -216,7 +216,7 @@ export default function Dashboard() {
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--mint)] animate-pulse" />
           Command Center
         </span>
-        <h1 className="font-[var(--font-heading)] font-bold text-2xl text-[var(--foreground)]">
+        <h1 className="font-[var(--font-heading)] font-bold text-2xl text-brand-gradient w-fit">
           Welcome back, {firstName}
         </h1>
       </div>
@@ -229,11 +229,17 @@ export default function Dashboard() {
             <Link
               key={s.label}
               to={s.to}
-              className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5 cursor-pointer transition-all duration-300 hover:border-[rgba(60,201,152,0.25)] hover:shadow-[0_0_20px_rgba(60,201,152,0.1)] block"
+              className="relative overflow-hidden bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5 cursor-pointer transition-all duration-300 hover:border-[rgba(60,201,152,0.25)] hover:shadow-[0_0_20px_rgba(60,201,152,0.1)] block"
             >
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[var(--brand-grad-from)] via-[var(--brand-grad-via)] to-[var(--brand-grad-to)] opacity-70"
+              />
               <div className="flex items-center justify-between mb-2">
                 <span className="label-mono">{s.label}</span>
-                <Icon size={16} strokeWidth={1.5} className="text-[var(--text-dim)]" />
+                <span className="w-8 h-8 rounded-[var(--radius-sm)] bg-[color-mix(in_oklab,var(--mint)_9%,transparent)] border border-[color-mix(in_oklab,var(--mint)_22%,transparent)] flex items-center justify-center">
+                  <Icon size={15} strokeWidth={1.5} className="text-[var(--mint)]" />
+                </span>
               </div>
               <p className="font-[var(--font-heading)] font-bold text-2xl text-[var(--foreground)]">
                 {s.value}

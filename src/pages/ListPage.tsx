@@ -126,7 +126,7 @@ export default function ListPage() {
             <Icon size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+            <h1 className="font-[var(--font-heading)] font-bold text-xl text-brand-gradient w-fit">
               {def.plural}
             </h1>
             <p className="label-mono">

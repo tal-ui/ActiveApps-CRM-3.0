@@ -1,20 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  /* Backgrounds — layered navy system */
-  --background: oklch(0.14 0.015 260);
-  --section-darker: oklch(0.12 0.012 260);
-  --section-surface: oklch(0.17 0.018 260);
-  --navy: oklch(0.18 0.02 260);
-  --navy-light: oklch(0.22 0.02 260);
-  --navy-surface: oklch(0.25 0.02 260);
-  --card: oklch(0.2 0.02 260);
-  --muted: oklch(0.22 0.015 260);
+  /* Backgrounds — brand "Option 2 (Moderate)" layered navy system: richer
+     blue-toned layers so the depth reads as navy, not near-black */
+  --background: oklch(0.2 0.03 260);
+  --section-darker: oklch(0.18 0.025 260);
+  --section-surface: oklch(0.23 0.035 260);
+  --navy: oklch(0.24 0.04 260);
+  --navy-light: oklch(0.28 0.04 260);
+  --navy-surface: oklch(0.31 0.04 260);
+  --card: oklch(0.26 0.04 260);
+  --muted: oklch(0.28 0.035 260);
 
   /* Mint accent */
   --mint: oklch(0.75 0.14 165);
   --mint-dim: oklch(0.65 0.12 165);
   --mint-glow: oklch(0.75 0.14 165 / 30%);
+
+  /* Brand gradient — wide-spectrum mint (yellow-green → teal) */
+  --brand-grad-from: oklch(0.8 0.12 155);
+  --brand-grad-via: oklch(0.75 0.14 165);
+  --brand-grad-to: oklch(0.6 0.14 185);
 
   /* Text hierarchy */
   --foreground: oklch(0.92 0.005 260);
@@ -34,12 +40,13 @@
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.75 0.14 165);
 
-  /* Charts — monochromatic mint */
-  --chart-1: #3cc998;
-  --chart-2: #32a67d;
-  --chart-3: #298464;
-  --chart-4: #1f634b;
-  --chart-5: #164435;
+  /* Charts — brand-gradient ramp (yellow-green → mint → teal), lightness
+     monotonic so it stays valid for ordinal/sequential data */
+  --chart-1: oklch(0.78 0.13 152);
+  --chart-2: oklch(0.71 0.14 165);
+  --chart-3: oklch(0.63 0.13 178);
+  --chart-4: oklch(0.55 0.11 190);
+  --chart-5: oklch(0.46 0.09 205);
 
   /* Typography */
   --font-heading: "New Rubrik Edge", system-ui, sans-serif;
@@ -54,10 +61,10 @@
   --radius-xl: 0.75rem;
 
   /* Theme-aware chrome */
-  --header-bg: oklch(0.14 0.015 260 / 85%);
+  --header-bg: oklch(0.2 0.03 260 / 85%);
   --sidebar-border: oklch(1 0 0 / 6%);
   --hairline: oklch(1 0 0 / 4%);
-  --scrollbar-thumb-hover: oklch(0.3 0.02 260);
+  --scrollbar-thumb-hover: oklch(0.37 0.04 260);
   --date-indicator-filter: invert(0.6);
   color-scheme: dark;
 }
@@ -79,6 +86,11 @@
   --mint-dim: oklch(0.52 0.12 165);
   --mint-glow: oklch(0.58 0.13 165 / 22%);
 
+  /* Brand gradient — deepened for light surfaces */
+  --brand-grad-from: oklch(0.52 0.12 155);
+  --brand-grad-via: oklch(0.48 0.13 165);
+  --brand-grad-to: oklch(0.4 0.13 185);
+
   /* Text hierarchy — dark slate on light */
   --foreground: oklch(0.24 0.02 260);
   --text-light: oklch(0.3 0.02 260);
@@ -96,12 +108,12 @@
   --input: oklch(0.25 0.03 260 / 20%);
   --ring: oklch(0.58 0.13 165);
 
-  /* Charts — mint ramp deepened for contrast on light surfaces */
-  --chart-1: #2fa97e;
-  --chart-2: #29906a;
-  --chart-3: #1f7355;
-  --chart-4: #185b43;
-  --chart-5: #124433;
+  /* Charts — brand-gradient ramp deepened for light surfaces */
+  --chart-1: oklch(0.6 0.14 150);
+  --chart-2: oklch(0.53 0.13 165);
+  --chart-3: oklch(0.44 0.12 185);
+  --chart-4: oklch(0.38 0.1 198);
+  --chart-5: oklch(0.32 0.08 210);
 
   /* Theme-aware chrome */
   --header-bg: oklch(0.985 0.003 260 / 85%);
@@ -137,6 +149,19 @@ html {
   box-shadow:
     0 0 30px color-mix(in oklab, var(--mint) 25%, transparent),
     0 0 80px color-mix(in oklab, var(--mint) 10%, transparent);
+}
+
+/* Brand-gradient heading treatment (page-level headings) */
+.text-brand-gradient {
+  background: linear-gradient(
+    90deg,
+    var(--brand-grad-from),
+    var(--brand-grad-via),
+    var(--brand-grad-to)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Mono label treatment */
