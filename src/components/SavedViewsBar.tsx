@@ -11,12 +11,15 @@ import {
   Modal,
   Toggle,
 } from "./ui";
-import type { ListFilter } from "./FilterBar";
+import type { ListFilter } from "../lib/filters";
 
 export interface ViewConfig {
   filters: ListFilter[];
   sortField: string;
   sortAsc: boolean;
+  // Column layout (names, in order). Empty = view doesn't pin columns
+  // (views saved before column management existed).
+  columns: string[];
 }
 
 interface SavedView {
@@ -32,10 +35,14 @@ interface SavedView {
 
 function normalizeConfig(config: Partial<ViewConfig> | null | undefined): ViewConfig {
   const filters = config?.filters;
+  const columns = config?.columns;
   return {
     filters: Array.isArray(filters) ? filters : [],
     sortField: typeof config?.sortField === "string" ? config.sortField : "updated_at",
     sortAsc: Boolean(config?.sortAsc),
+    columns: Array.isArray(columns)
+      ? columns.filter((c): c is string => typeof c === "string")
+      : [],
   };
 }
 
@@ -51,6 +58,7 @@ export default function SavedViewsBar({
   filters,
   sortField,
   sortAsc,
+  columns,
   onApply,
   onClear,
 }: {
@@ -58,6 +66,7 @@ export default function SavedViewsBar({
   filters: ListFilter[];
   sortField: string;
   sortAsc: boolean;
+  columns: string[];
   onApply: (config: ViewConfig) => void;
   onClear: () => void;
 }) {
@@ -107,10 +116,16 @@ export default function SavedViewsBar({
   }, [object, profile, reload]);
 
   const activeView = views.find((v) => v.id === activeId) ?? null;
-  const currentConfig: ViewConfig = { filters, sortField, sortAsc };
+  const currentConfig: ViewConfig = { filters, sortField, sortAsc, columns };
+  const savedConfig = activeView ? normalizeConfig(activeView.config) : null;
+  // Views saved before column management existed don't pin columns — don't
+  // count the current column layout against them.
   const dirty =
-    !!activeView &&
-    JSON.stringify(currentConfig) !== JSON.stringify(normalizeConfig(activeView.config));
+    !!savedConfig &&
+    JSON.stringify({
+      ...currentConfig,
+      columns: savedConfig.columns.length > 0 ? columns : [],
+    }) !== JSON.stringify(savedConfig);
 
   async function saveView() {
     if (!profile || !name.trim()) return;

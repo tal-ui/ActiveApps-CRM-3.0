@@ -23,6 +23,7 @@ export default function SearchableSelect({
   placeholder = "— Select —",
   disabled,
   allowClear = true,
+  defaultOpen = false,
   className = "",
 }: {
   options: SearchableOption[];
@@ -31,9 +32,10 @@ export default function SearchableSelect({
   placeholder?: string;
   disabled?: boolean;
   allowClear?: boolean;
+  defaultOpen?: boolean;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);

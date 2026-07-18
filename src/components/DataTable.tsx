@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { FieldDef } from "../lib/objects";
 import FieldValue from "./FieldValue";
+import InlineCell from "./InlineCell";
 
 export default function DataTable({
   columns,
@@ -9,6 +11,8 @@ export default function DataTable({
   sortField,
   sortAsc,
   onSort,
+  editable = false,
+  onSaveCell,
 }: {
   columns: FieldDef[];
   rows: Record<string, unknown>[];
@@ -17,7 +21,16 @@ export default function DataTable({
   sortField?: string;
   sortAsc?: boolean;
   onSort?: (field: string) => void;
+  editable?: boolean;
+  onSaveCell?: (
+    rowId: string,
+    field: FieldDef,
+    value: unknown,
+  ) => Promise<string | null>;
 }) {
+  // Cell currently in edit mode — its td must not clip the editor popover
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+
   return (
     <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[rgba(255,255,255,0.06)]">
       <table className="w-full">
@@ -50,14 +63,34 @@ export default function DataTable({
                 onRowClick ? "cursor-pointer" : ""
               }`}
             >
-              {columns.map((c) => (
-                <td
-                  key={c.name}
-                  className="px-4 py-3 text-[var(--text-mid)] text-sm whitespace-nowrap max-w-[260px] overflow-hidden text-ellipsis"
-                >
-                  <FieldValue field={c} record={row} lookupMaps={lookupMaps} />
-                </td>
-              ))}
+              {columns.map((c) => {
+                const cellKey = `${row.id}:${c.name}`;
+                const canEdit = editable && onSaveCell && !c.readOnly;
+                return (
+                  <td
+                    key={c.name}
+                    className={`px-4 py-3 text-[var(--text-mid)] text-sm whitespace-nowrap max-w-[260px] ${
+                      editingCell === cellKey
+                        ? "overflow-visible relative z-10"
+                        : "overflow-hidden text-ellipsis"
+                    }`}
+                  >
+                    {canEdit ? (
+                      <InlineCell
+                        field={c}
+                        record={row}
+                        lookupMaps={lookupMaps}
+                        onSave={(v) => onSaveCell(String(row.id), c, v)}
+                        onEditingChange={(e) =>
+                          setEditingCell(e ? cellKey : null)
+                        }
+                      />
+                    ) : (
+                      <FieldValue field={c} record={row} lookupMaps={lookupMaps} />
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

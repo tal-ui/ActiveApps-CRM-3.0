@@ -2,18 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Download, Kanban, Plus, Search, Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { OBJECTS } from "../lib/objects";
-import { useLookupMaps } from "../lib/lookups";
+import { OBJECTS, type FieldDef } from "../lib/objects";
+import { invalidateLookup, useLookupMaps } from "../lib/lookups";
 import { downloadCsv } from "../lib/csv";
-import { dateToMs, msToDateInput } from "../lib/format";
+import { msToDateInput } from "../lib/format";
+import { matchesFilter, type ListFilter } from "../lib/filters";
 import { Button, EmptyState, Input, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
 import RecordForm from "../components/RecordForm";
 import InvoiceGenerator from "../components/InvoiceGenerator";
-import FilterBar, { type ListFilter } from "../components/FilterBar";
+import FilterBar from "../components/FilterBar";
+import ColumnsMenu from "../components/ColumnsMenu";
 import SavedViewsBar from "../components/SavedViewsBar";
 
 const PAGE_SIZE = 25;
+
+const colStorageKey = (object: string) => `aa-crm-columns-${object}`;
 
 export default function ListPage() {
   const { object = "" } = useParams();
@@ -31,9 +35,48 @@ export default function ListPage() {
   const [showGenerator, setShowGenerator] = useState(false);
   const [reload, setReload] = useState(0);
 
-  const columns = useMemo(
-    () => (def ? def.fields.filter((f) => f.showInList).slice(0, 7) : []),
+  const defaultCols = useMemo(
+    () =>
+      def
+        ? def.fields.filter((f) => f.showInList).slice(0, 7).map((f) => f.name)
+        : [],
     [def],
+  );
+  const [colNames, setColNames] = useState<string[]>([]);
+
+  // Per-object column layout, persisted locally
+  useEffect(() => {
+    if (!def) return;
+    let stored: string[] = [];
+    try {
+      const raw = localStorage.getItem(colStorageKey(object));
+      if (raw) stored = (JSON.parse(raw) as string[]) ?? [];
+    } catch {
+      /* corrupted entry — fall back to defaults */
+    }
+    const valid = stored.filter((n) => def.fields.some((f) => f.name === n));
+    setColNames(valid.length > 0 ? valid : defaultCols);
+  }, [object, def, defaultCols]);
+
+  function updateCols(next: string[]) {
+    setColNames(next);
+    try {
+      localStorage.setItem(colStorageKey(object), JSON.stringify(next));
+    } catch {
+      /* storage full/unavailable — layout just won't persist */
+    }
+  }
+
+  const effectiveCols = colNames.length > 0 ? colNames : defaultCols;
+  const columns = useMemo(
+    () =>
+      def
+        ? (effectiveCols
+            .map((n) => def.fields.find((f) => f.name === n))
+            .filter(Boolean) as FieldDef[])
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [def, effectiveCols.join(",")],
   );
   const lookupObjects = useMemo(
     () =>
@@ -71,20 +114,7 @@ export default function ListPage() {
     let out = rows;
     for (const f of filters) {
       const fieldDef = def?.fields.find((fd) => fd.name === f.field);
-      out = out.filter((r) => {
-        if (f.op === "eq") {
-          if (fieldDef?.type === "boolean") {
-            return Boolean(r[f.field]) === (f.value === "true");
-          }
-          return String(r[f.field] ?? "") === (f.value ?? "");
-        }
-        const v = Number(r[f.field]);
-        const fromMs = f.from ? dateToMs(f.from) : null;
-        const toMs = f.to ? dateToMs(f.to) : null;
-        if (fromMs != null && !(v >= fromMs)) return false;
-        if (toMs != null && !(v <= toMs + 86399999)) return false;
-        return true;
-      });
+      out = out.filter((r) => matchesFilter(r, f, fieldDef));
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -159,6 +189,12 @@ export default function ListPage() {
               setPage(0);
             }}
           />
+          <ColumnsMenu
+            def={def}
+            selected={effectiveCols}
+            defaultCols={defaultCols}
+            onChange={updateCols}
+          />
           {object === "tasks" && (
             <Button variant="ghost" onClick={() => navigate("/tasks/board")}>
               <Kanban size={15} strokeWidth={1.5} />
@@ -199,10 +235,12 @@ export default function ListPage() {
         filters={filters}
         sortField={sortField}
         sortAsc={sortAsc}
+        columns={effectiveCols}
         onApply={(c) => {
           setFilters(c.filters);
           setSortField(c.sortField);
           setSortAsc(c.sortAsc);
+          if (c.columns.length > 0) updateCols(c.columns);
           setPage(0);
         }}
         onClear={() => {
@@ -239,6 +277,27 @@ export default function ListPage() {
                 setSortField(f);
                 setSortAsc(true);
               }
+            }}
+            editable
+            onSaveCell={async (rowId, field, value) => {
+              const payload: Record<string, unknown> = {
+                [field.name]: value,
+                updated_at: Date.now(),
+              };
+              const { error } = await supabase
+                .from(object)
+                .update(payload)
+                .eq("id", rowId);
+              if (error) return error.message;
+              // Keep the local updated_at as-is so the row doesn't jump
+              // position mid-edit under the default updated_at sort.
+              setRows((rs) =>
+                rs.map((r) =>
+                  r.id === rowId ? { ...r, [field.name]: value } : r,
+                ),
+              );
+              invalidateLookup(object);
+              return null;
             }}
           />
           {pageCount > 1 && (

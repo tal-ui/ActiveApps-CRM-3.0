@@ -2,18 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { Filter, X } from "lucide-react";
 import type { ObjectDef } from "../lib/objects";
 import { useLookupOptions } from "../lib/lookups";
-import { dateToMs, fmtDate } from "../lib/format";
+import {
+  opsForType,
+  opChipLabel,
+  type FilterOp,
+  type ListFilter,
+} from "../lib/filters";
+import { dateToMs, fmtDate, fmtNumber } from "../lib/format";
 import { Button, FieldLabel, Input, Select } from "./ui";
+import SearchableSelect from "./SearchableSelect";
 
-export type ListFilter = {
-  field: string;
-  op: "eq" | "range";
-  value?: string;
-  from?: string;
-  to?: string;
-};
-
-const FILTERABLE_TYPES = ["picklist", "boolean", "lookup", "date"];
+export type { ListFilter } from "../lib/filters";
 
 function FilterChip({
   def,
@@ -35,19 +34,24 @@ function FilterChip({
       text = `${filter.from ? fmtDate(dateToMs(filter.from)) : "…"} → ${
         filter.to ? fmtDate(dateToMs(filter.to)) : "…"
       }`;
+    } else if (field.type === "date") {
+      text = filter.value ? fmtDate(dateToMs(filter.value)) : "";
     } else if (field.type === "boolean") {
       text = filter.value === "true" ? "Yes" : "No";
     } else if (field.type === "picklist") {
       text = field.options?.find((o) => o.value === filter.value)?.label ?? text;
     } else if (field.type === "lookup") {
       text = lookupOptions.find((o) => o.value === filter.value)?.label ?? text;
+    } else if (field.type === "number" || field.type === "currency") {
+      text = filter.value ? fmtNumber(Number(filter.value)) : "";
     }
   }
+  const opText = field ? opChipLabel(filter.op, field.type) : filter.op;
 
   return (
     <span className="inline-flex items-center gap-1.5 bg-[var(--navy-surface)] border border-[rgba(255,255,255,0.12)] rounded-full px-3 py-1 text-xs text-[var(--text-mid)]">
-      <span className="truncate max-w-[220px]">
-        {field?.label ?? filter.field}: {text}
+      <span className="truncate max-w-[240px]">
+        {field?.label ?? filter.field} {opText} {text}
       </span>
       <button
         onClick={onRemove}
@@ -71,15 +75,15 @@ export default function FilterBar({
 }) {
   const [open, setOpen] = useState(false);
   const [fieldName, setFieldName] = useState("");
+  const [op, setOp] = useState<FilterOp>("eq");
   const [value, setValue] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const fields = def.fields.filter(
-    (f) => FILTERABLE_TYPES.includes(f.type) && !f.hidden,
-  );
+  const fields = def.fields.filter((f) => !f.hidden);
   const field = fields.find((f) => f.name === fieldName);
+  const ops = field ? opsForType(field.type) : [];
   const lookupOptions = useLookupOptions(
     field?.type === "lookup" ? field.lookup : undefined,
   );
@@ -98,6 +102,7 @@ export default function FilterBar({
 
   function reset() {
     setFieldName("");
+    setOp("eq");
     setValue("");
     setFrom("");
     setTo("");
@@ -106,15 +111,90 @@ export default function FilterBar({
   function addFilter() {
     if (!field) return;
     const next: ListFilter =
-      field.type === "date"
-        ? { field: field.name, op: "range", from, to }
-        : { field: field.name, op: "eq", value };
+      op === "range"
+        ? { field: field.name, op, from, to }
+        : { field: field.name, op, value };
     onChange([...filters, next]);
     reset();
     setOpen(false);
   }
 
-  const canAdd = field && (field.type === "date" ? Boolean(from || to) : value !== "");
+  const canAdd =
+    field && (op === "range" ? Boolean(from || to) : value !== "");
+
+  const valueEditor = (() => {
+    if (!field) return null;
+    if (op === "range") {
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <FieldLabel>From</FieldLabel>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>To</FieldLabel>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        </div>
+      );
+    }
+    switch (field.type) {
+      case "date":
+        return (
+          <Input type="date" value={value} onChange={(e) => setValue(e.target.value)} />
+        );
+      case "number":
+      case "currency":
+        return (
+          <Input
+            type="number"
+            step="any"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Value"
+          />
+        );
+      case "picklist":
+        return (
+          <Select value={value} onChange={(e) => setValue(e.target.value)}>
+            <option value="">Select…</option>
+            {(field.options ?? []).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        );
+      case "boolean":
+        return (
+          <Select value={value} onChange={(e) => setValue(e.target.value)}>
+            <option value="">Select…</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </Select>
+        );
+      case "lookup":
+        return (
+          <SearchableSelect
+            options={lookupOptions}
+            value={value}
+            onChange={setValue}
+            placeholder="Search…"
+          />
+        );
+      default:
+        return (
+          <Input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Text…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && canAdd) addFilter();
+            }}
+          />
+        );
+    }
+  })();
 
   return (
     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -130,13 +210,15 @@ export default function FilterBar({
           Add filter
         </Button>
         {open && (
-          <div className="absolute left-0 right-0 sm:right-auto top-full mt-2 z-30 sm:w-72 bg-[var(--card)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-md)] p-3 space-y-3 shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
+          <div className="absolute left-0 right-0 sm:right-auto top-full mt-2 z-30 sm:w-80 bg-[var(--card)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-md)] p-3 space-y-3 shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
             <div>
               <FieldLabel>Field</FieldLabel>
               <Select
                 value={fieldName}
                 onChange={(e) => {
+                  const f = fields.find((x) => x.name === e.target.value);
                   setFieldName(e.target.value);
+                  setOp(f ? opsForType(f.type)[0].value : "eq");
                   setValue("");
                   setFrom("");
                   setTo("");
@@ -150,12 +232,21 @@ export default function FilterBar({
                 ))}
               </Select>
             </div>
-            {field?.type === "picklist" && (
+            {field && (
               <div>
-                <FieldLabel>Value</FieldLabel>
-                <Select value={value} onChange={(e) => setValue(e.target.value)}>
-                  <option value="">Select…</option>
-                  {(field.options ?? []).map((o) => (
+                <FieldLabel>Operator</FieldLabel>
+                <Select
+                  value={op}
+                  onChange={(e) => {
+                    setOp(e.target.value as FilterOp);
+                    if (e.target.value === "range") setValue("");
+                    else {
+                      setFrom("");
+                      setTo("");
+                    }
+                  }}
+                >
+                  {ops.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
@@ -163,39 +254,10 @@ export default function FilterBar({
                 </Select>
               </div>
             )}
-            {field?.type === "boolean" && (
+            {field && (
               <div>
-                <FieldLabel>Value</FieldLabel>
-                <Select value={value} onChange={(e) => setValue(e.target.value)}>
-                  <option value="">Select…</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </Select>
-              </div>
-            )}
-            {field?.type === "lookup" && (
-              <div>
-                <FieldLabel>Value</FieldLabel>
-                <Select value={value} onChange={(e) => setValue(e.target.value)}>
-                  <option value="">Select…</option>
-                  {lookupOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
-            {field?.type === "date" && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <FieldLabel>From</FieldLabel>
-                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-                </div>
-                <div>
-                  <FieldLabel>To</FieldLabel>
-                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-                </div>
+                {op !== "range" && <FieldLabel>Value</FieldLabel>}
+                {valueEditor}
               </div>
             )}
             <div className="flex justify-end">
