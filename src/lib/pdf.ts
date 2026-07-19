@@ -31,10 +31,8 @@ async function loadLogoDataUrl(): Promise<string | null> {
 }
 
 function fmtD(ms: number): string {
-  return new Date(Number(ms)).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+  const d = new Date(Number(ms));
+  return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
 export async function generateMonthlyReport(opts: {
