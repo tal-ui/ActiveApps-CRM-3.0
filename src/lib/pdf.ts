@@ -83,14 +83,12 @@ export async function generateMonthlyReport(opts: {
   const billableHours = entries
     .filter((e) => e.is_billable)
     .reduce((s, e) => s + e.duration, 0);
-  const nonBillable = totalHours - billableHours;
 
   const boxes = [
     { label: "TOTAL HOURS", value: totalHours.toFixed(1) },
     { label: "BILLABLE", value: billableHours.toFixed(1) },
-    { label: "UNBILLED", value: nonBillable.toFixed(1) },
   ];
-  const boxW = (pageWidth - margin * 2 - 2 * 10) / 3;
+  const boxW = (pageWidth - margin * 2 - 10) / 2;
   boxes.forEach((b, i) => {
     const x = margin + i * (boxW + 10);
     doc.setFillColor(...LIGHT);
@@ -106,19 +104,16 @@ export async function generateMonthlyReport(opts: {
     doc.text(b.value, x + 10, 168);
   });
 
-  /* --- Two detail tables: billable items (main), then unbilled items.
-         Rows are auto-numbered from 1 per table and sorted by date
-         ascending; totals are labor hours only. --- */
+  /* --- Detail table: billable items only, auto-numbered from 1 and
+         sorted by date ascending; totals are labor hours only. --- */
   const sorted = [...entries].sort((a, b) => a.date - b.date);
   const billable = sorted.filter((e) => e.is_billable);
-  const unbilled = sorted.filter((e) => !e.is_billable);
 
   const HEAD = [
     "Item #",
     "Delivered / Completion Date",
     "Subject",
     "Description",
-    "Project",
     "# of Hours",
   ];
 
@@ -128,7 +123,6 @@ export async function generateMonthlyReport(opts: {
       fmtD(e.date),
       e.task || "—",
       e.description || "—",
-      e.project,
       { content: e.duration.toFixed(2), styles: { halign: "right" as const } },
     ]);
 
@@ -156,8 +150,8 @@ export async function generateMonthlyReport(opts: {
         0: { cellWidth: 36, halign: "center" },
         1: { cellWidth: 66 },
         2: { cellWidth: 100 },
-        4: { cellWidth: 90 },
-        5: { cellWidth: 50, halign: "right" },
+        // Description takes all remaining width (~263pt on A4)
+        4: { cellWidth: 50, halign: "right" },
       },
     });
     return (
@@ -181,12 +175,12 @@ export async function generateMonthlyReport(opts: {
   };
 
   /* Billable items — main table, ends with the billable hours total */
-  let y = sectionHeading(206, "Billable Items");
+  const y = sectionHeading(206, "Billable Items");
   const billableBody = itemRows(billable);
   billableBody.push([
     {
       content: "TOTAL HOURS",
-      colSpan: 5,
+      colSpan: 4,
       styles: {
         fontStyle: "bold",
         halign: "right",
@@ -204,18 +198,7 @@ export async function generateMonthlyReport(opts: {
       },
     },
   ]);
-  y = drawTable(y, billableBody);
-
-  /* Unbilled items */
-  y = sectionHeading(y + 26, "Unbilled Items");
-  if (unbilled.length === 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...GRAY);
-    doc.text("No unbilled items this period.", margin, y + 12);
-  } else {
-    drawTable(y, itemRows(unbilled));
-  }
+  drawTable(y, billableBody);
 
   /* --- Footer on every page --- */
   const pageCount = doc.getNumberOfPages();
