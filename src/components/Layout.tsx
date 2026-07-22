@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Banknote,
   CalendarRange,
   Calculator,
+  ChevronDown,
   Kanban,
   LayoutDashboard,
   LayoutPanelLeft,
@@ -17,8 +18,9 @@ import {
   Users,
   Webhook,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
-import { NAV_OBJECTS, OBJECTS } from "../lib/objects";
+import { OBJECTS } from "../lib/objects";
 import { useAuth } from "../lib/auth";
 import TimerWidget from "./TimerWidget";
 import ThemeToggle from "./ThemeToggle";
@@ -26,11 +28,120 @@ import CommandPalette from "./CommandPalette";
 import NotificationsBell from "./NotificationsBell";
 import QuickActions from "./QuickActions";
 
+interface NavEntry {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+}
+
+const objEntry = (name: string): NavEntry => ({
+  to: `/${name}`,
+  label: OBJECTS[name].plural,
+  icon: OBJECTS[name].icon,
+});
+
+// Sidebar topics: each group collapses, remembers its state, and auto-opens
+// when it owns the active route. Dashboard stays a top-level item.
+const NAV_GROUPS: { key: string; label: string; items: NavEntry[] }[] = [
+  {
+    key: "sales",
+    label: "Sales",
+    items: [
+      { to: "/pipeline", label: "Pipeline", icon: Kanban },
+      objEntry("leads"),
+      objEntry("opportunities"),
+      objEntry("quotes"),
+      objEntry("accounts"),
+      objEntry("contacts"),
+    ],
+  },
+  {
+    key: "delivery",
+    label: "Delivery",
+    items: [objEntry("projects"), objEntry("tasks"), objEntry("time_entries")],
+  },
+  {
+    key: "finance",
+    label: "Finance",
+    items: [
+      { to: "/financial", label: "Financial", icon: Banknote },
+      { to: "/monthly", label: "Monthly Ops", icon: CalendarRange },
+      objEntry("invoices"),
+      objEntry("monthly_summaries"),
+      objEntry("services"),
+      { to: "/currency", label: "Currency", icon: Calculator },
+    ],
+  },
+  {
+    key: "settings",
+    label: "Settings & Setup",
+    items: [
+      { to: "/settings/custom-fields", label: "Custom Fields", icon: SlidersHorizontal },
+      { to: "/settings/layouts", label: "Page Layouts", icon: LayoutPanelLeft },
+      { to: "/settings/slack", label: "Slack", icon: Slack },
+      { to: "/settings/maintenance", label: "Maintenance", icon: Wrench, adminOnly: true },
+      { to: "/settings/users", label: "Users & Roles", icon: Users, adminOnly: true },
+      { to: "/settings/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
+      { to: "/settings/workspace", label: "Workspace", icon: Settings2, adminOnly: true },
+      { to: "/settings/automations", label: "Automations", icon: Webhook, adminOnly: true },
+    ],
+  },
+];
+
+// Everyday work groups start open; setup starts collapsed
+const DEFAULT_CLOSED = new Set(["settings"]);
+const GROUPS_STORAGE_KEY = "aa-crm-nav-groups";
+
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem(GROUPS_STORAGE_KEY) || "{}",
+      ) as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  });
+
+  const groupOpen = (key: string) =>
+    openGroups[key] ?? !DEFAULT_CLOSED.has(key);
+
+  function toggleGroup(key: string) {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [key]: !(prev[key] ?? !DEFAULT_CLOSED.has(key)) };
+      try {
+        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* preference just won't persist */
+      }
+      return next;
+    });
+  }
+
+  // Reveal the group that owns the current route (transient — not persisted,
+  // so a deliberately collapsed group stays collapsed on the next visit)
+  useEffect(() => {
+    const active = NAV_GROUPS.find((g) =>
+      g.items.some(
+        (it) =>
+          location.pathname === it.to ||
+          location.pathname.startsWith(`${it.to}/`),
+      ),
+    );
+    if (active) {
+      setOpenGroups((prev) =>
+        (prev[active.key] ?? !DEFAULT_CLOSED.has(active.key))
+          ? prev
+          : { ...prev, [active.key]: true },
+      );
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -109,73 +220,48 @@ export default function Layout() {
               <LayoutDashboard size={16} strokeWidth={1.5} />
               Dashboard
             </NavLink>
-            <NavLink to="/pipeline" className={navItemClass}>
-              <Kanban size={16} strokeWidth={1.5} />
-              Pipeline
-            </NavLink>
-            <NavLink to="/financial" className={navItemClass}>
-              <Banknote size={16} strokeWidth={1.5} />
-              Financial
-            </NavLink>
-            <NavLink to="/monthly" className={navItemClass}>
-              <CalendarRange size={16} strokeWidth={1.5} />
-              Monthly Ops
-            </NavLink>
-            <NavLink to="/currency" className={navItemClass}>
-              <Calculator size={16} strokeWidth={1.5} />
-              Currency
-            </NavLink>
-            {NAV_OBJECTS.map((name) => {
-              const def = OBJECTS[name];
-              const Icon = def.icon;
+
+            {NAV_GROUPS.map((group) => {
+              const items = group.items.filter(
+                (it) => !it.adminOnly || isAdmin,
+              );
+              if (items.length === 0) return null;
+              const open = groupOpen(group.key);
               return (
-                <NavLink key={name} to={`/${name}`} className={navItemClass}>
-                  <Icon size={16} strokeWidth={1.5} />
-                  {def.plural}
-                </NavLink>
+                <div key={group.key}>
+                  <button
+                    onClick={(e) => {
+                      // Keep the mobile drawer open — this isn't a navigation
+                      e.stopPropagation();
+                      toggleGroup(group.key);
+                    }}
+                    aria-expanded={open}
+                    className="w-full flex items-center justify-between px-3 pt-4 pb-1 cursor-pointer group/nav"
+                  >
+                    <span className="label-mono !text-[var(--text-muted)] group-hover/nav:!text-[var(--text-dim)] transition-colors">
+                      {group.label}
+                    </span>
+                    <ChevronDown
+                      size={12}
+                      strokeWidth={1.5}
+                      className={`text-[var(--text-muted)] transition-transform duration-200 ${
+                        open ? "" : "-rotate-90"
+                      }`}
+                    />
+                  </button>
+                  {open && (
+                    <div className="space-y-1">
+                      {items.map((it) => (
+                        <NavLink key={it.to} to={it.to} className={navItemClass}>
+                          <it.icon size={16} strokeWidth={1.5} />
+                          {it.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
-
-            <p className="label-mono !text-[var(--text-muted)] pt-5 pb-1 px-3">
-              Settings &amp; Setup
-            </p>
-            <NavLink to="/settings/custom-fields" className={navItemClass}>
-              <SlidersHorizontal size={16} strokeWidth={1.5} />
-              Custom Fields
-            </NavLink>
-            <NavLink to="/settings/layouts" className={navItemClass}>
-              <LayoutPanelLeft size={16} strokeWidth={1.5} />
-              Page Layouts
-            </NavLink>
-            <NavLink to="/settings/slack" className={navItemClass}>
-              <Slack size={16} strokeWidth={1.5} />
-              Slack
-            </NavLink>
-
-            {isAdmin && (
-              <>
-                <NavLink to="/settings/maintenance" className={navItemClass}>
-                  <Wrench size={16} strokeWidth={1.5} />
-                  Maintenance
-                </NavLink>
-                <NavLink to="/settings/users" className={navItemClass}>
-                  <Users size={16} strokeWidth={1.5} />
-                  Users & Roles
-                </NavLink>
-                <NavLink to="/settings/audit" className={navItemClass}>
-                  <ScrollText size={16} strokeWidth={1.5} />
-                  Audit Log
-                </NavLink>
-                <NavLink to="/settings/workspace" className={navItemClass}>
-                  <Settings2 size={16} strokeWidth={1.5} />
-                  Workspace
-                </NavLink>
-                <NavLink to="/settings/automations" className={navItemClass}>
-                  <Webhook size={16} strokeWidth={1.5} />
-                  Automations
-                </NavLink>
-              </>
-            )}
           </nav>
         </div>
 
