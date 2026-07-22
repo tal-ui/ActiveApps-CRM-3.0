@@ -14,6 +14,8 @@ import {
   fmtNumber,
 } from "../lib/format";
 import { Badge, Input, Select, Textarea, Toggle } from "./ui";
+import RichTextEditor from "./RichTextEditor";
+import { sanitizeHtml } from "../lib/sanitizeHtml";
 
 /* ---------- Edit control ---------- */
 
@@ -64,6 +66,11 @@ export function CustomFieldInput({
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
         />
+      );
+      break;
+    case "richtext":
+      control = (
+        <RichTextEditor value={String(value ?? "")} onChange={onChange} />
       );
       break;
     case "picklist":
@@ -333,6 +340,16 @@ export function CustomFieldDisplay({
         <span className="whitespace-pre-wrap text-[var(--text-mid)]">
           {row.value_text}
         </span>
+      ) : (
+        empty
+      );
+    case "richtext":
+      return row.value_text ? (
+        <div
+          className="rich-text-content text-[var(--text-mid)]"
+          // Sanitized on save AND on render — stored HTML is never trusted
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(row.value_text) }}
+        />
       ) : (
         empty
       );

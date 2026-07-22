@@ -33,7 +33,7 @@ import AttachmentsPanel from "../components/AttachmentsPanel";
 import AiInsightPanel from "../components/AiInsightPanel";
 
 // Objects that support file attachments / AI insight
-const ATTACHABLE = ["accounts", "opportunities", "projects", "invoices", "quotes"];
+const ATTACHABLE = ["accounts", "opportunities", "projects", "invoices", "quotes", "tasks"];
 const AI_OBJECTS = ["accounts", "opportunities", "projects"] as const;
 
 interface RenderItem {
@@ -161,7 +161,9 @@ export default function RecordPage() {
       return {
         key: `cf:${cfId}`,
         label: cf.label,
-        span: span ?? (cf.field_type === "textarea" ? 2 : 1),
+        span:
+          span ??
+          (cf.field_type === "textarea" || cf.field_type === "richtext" ? 2 : 1),
         node: <CustomFieldDisplay def={cf} row={cfRows[cfId]} />,
       };
     };
@@ -230,6 +232,25 @@ export default function RecordPage() {
       .delete()
       .eq("object_name", object)
       .eq("record_id", id);
+    // Attachments are polymorphic (no FK) — remove storage objects and rows
+    // here or they orphan when the record goes away.
+    if (ATTACHABLE.includes(object)) {
+      const { data: atts } = await supabase
+        .from("attachments")
+        .select("id, storage_path")
+        .eq("entity_type", object)
+        .eq("entity_id", id);
+      if (atts && atts.length > 0) {
+        await supabase.storage
+          .from("attachments")
+          .remove(atts.map((a) => a.storage_path as string));
+        await supabase
+          .from("attachments")
+          .delete()
+          .eq("entity_type", object)
+          .eq("entity_id", id);
+      }
+    }
     await supabase.from(object).delete().eq("id", id);
     invalidateLookup(object);
     navigate(`/${object}`);
@@ -360,15 +381,17 @@ export default function RecordPage() {
             </section>
           ))}
 
-          {/* Related lists */}
-          {relatedLists.map((rl) => (
-            <RelatedList
-              key={rl.object + rl.foreignKey}
-              def={rl}
-              parentId={id}
-              onChanged={() => setReload((r) => r + 1)}
-            />
-          ))}
+          {/* Related lists (main column) */}
+          {relatedLists
+            .filter((rl) => !rl.inRail)
+            .map((rl) => (
+              <RelatedList
+                key={rl.object + rl.foreignKey}
+                def={rl}
+                parentId={id}
+                onChanged={() => setReload((r) => r + 1)}
+              />
+            ))}
         </div>
 
         {/* Right rail */}
@@ -385,6 +408,17 @@ export default function RecordPage() {
           {ATTACHABLE.includes(object) && (
             <AttachmentsPanel entityType={object} entityId={id} />
           )}
+          {/* Rail related lists (e.g. a task's time entries, under its files) */}
+          {relatedLists
+            .filter((rl) => rl.inRail)
+            .map((rl) => (
+              <RelatedList
+                key={rl.object + rl.foreignKey}
+                def={rl}
+                parentId={id}
+                onChanged={() => setReload((r) => r + 1)}
+              />
+            ))}
         </div>
       </div>
 

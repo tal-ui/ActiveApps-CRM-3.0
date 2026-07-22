@@ -66,6 +66,8 @@ export interface RelatedListDef {
   foreignKey: string;
   title?: string;
   columns: string[];
+  // Render in the record page's right rail instead of the main column
+  inRail?: boolean;
 }
 
 export interface ObjectDef {
@@ -289,7 +291,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "description", label: "Details", type: "textarea", section: "Notes" },
     ],
     relatedLists: [
-      { object: "time_entries", foreignKey: "task_id", columns: ["date", "duration", "is_billable", "description"] },
+      { object: "time_entries", foreignKey: "task_id", columns: ["date", "duration", "is_billable", "description"], inRail: true },
     ],
   },
 

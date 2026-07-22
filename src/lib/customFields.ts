@@ -10,6 +10,7 @@ import {
 export type CustomFieldType =
   | "text"
   | "textarea"
+  | "richtext"
   | "number"
   | "integer"
   | "currency"
@@ -26,6 +27,7 @@ export type CustomFieldType =
 export const CUSTOM_FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
   { value: "text", label: "Text" },
   { value: "textarea", label: "Text Area" },
+  { value: "richtext", label: "Rich Text" },
   { value: "number", label: "Number" },
   { value: "integer", label: "Integer" },
   { value: "currency", label: "Currency" },
@@ -246,6 +248,9 @@ export function missingRequired(
     if (def.field_type === "boolean") continue;
     if (def.field_type === "multi_picklist") {
       if (!Array.isArray(v) || v.length === 0) return def.label;
+    } else if (def.field_type === "richtext") {
+      // Rich text can hold markup with no actual content (e.g. "<p><br></p>")
+      if (!String(v ?? "").replace(/<[^>]*>/g, "").trim()) return def.label;
     } else if (v === undefined || v === "") {
       return def.label;
     }

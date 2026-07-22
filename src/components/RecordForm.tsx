@@ -507,7 +507,9 @@ export default function RecordForm({
                 <div
                   key={cf.id}
                   className={
-                    cf.field_type === "textarea" || cf.field_type === "multi_picklist"
+                    cf.field_type === "textarea" ||
+                    cf.field_type === "richtext" ||
+                    cf.field_type === "multi_picklist"
                       ? "sm:col-span-2"
                       : ""
                   }

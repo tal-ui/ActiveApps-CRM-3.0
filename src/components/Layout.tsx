@@ -24,6 +24,7 @@ import TimerWidget from "./TimerWidget";
 import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./CommandPalette";
 import NotificationsBell from "./NotificationsBell";
+import QuickActions from "./QuickActions";
 
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth();
@@ -265,6 +266,7 @@ export default function Layout() {
                 <span className="label-mono !text-inherit hidden md:inline">⌘K</span>
               </button>
               <NotificationsBell />
+              <QuickActions />
               <TimerWidget />
               <ThemeToggle />
             </div>

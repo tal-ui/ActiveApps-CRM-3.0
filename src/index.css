@@ -164,6 +164,33 @@ html {
   color: transparent;
 }
 
+/* Rich text content (editor surface + rendered display) — Tailwind preflight
+   strips list/link styling, restore it inside rich text blocks */
+.rich-text-content ul {
+  list-style: disc;
+  padding-inline-start: 1.4em;
+  margin: 0.35em 0;
+}
+.rich-text-content ol {
+  list-style: decimal;
+  padding-inline-start: 1.4em;
+  margin: 0.35em 0;
+}
+.rich-text-content p,
+.rich-text-content div,
+.rich-text-content blockquote {
+  margin: 0.25em 0;
+}
+.rich-text-content blockquote {
+  border-inline-start: 2px solid color-mix(in oklab, var(--mint) 45%, transparent);
+  padding-inline-start: 0.75em;
+  color: var(--text-dim);
+}
+.rich-text-content a {
+  color: var(--mint);
+  text-decoration: underline;
+}
+
 /* Mono label treatment */
 .label-mono {
   font-family: var(--font-mono);

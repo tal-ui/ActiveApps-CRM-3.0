@@ -5,6 +5,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { badgeTone } from "../lib/objects";
@@ -150,6 +151,9 @@ export function Badge({ value }: { value: string }) {
 
 /* ---------- Modal ---------- */
 
+// Stack of open modals so Escape only dismisses the top-most one
+const modalStack: symbol[] = [];
+
 export function Modal({
   title,
   onClose,
@@ -161,6 +165,27 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const idRef = useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol("modal");
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const id = idRef.current as symbol;
+    modalStack.push(id);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && modalStack[modalStack.length - 1] === id) {
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      const i = modalStack.indexOf(id);
+      if (i >= 0) modalStack.splice(i, 1);
+    };
+  }, []);
+
   // Render to document.body so the fixed overlay isn't trapped by an ancestor
   // that establishes a containing block for fixed elements (e.g. the header's
   // backdrop-filter) — which would otherwise clip/mis-position the modal.

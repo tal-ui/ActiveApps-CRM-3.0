@@ -101,6 +101,8 @@ export default function SearchableSelect({
       if (rendered[highlight]) pick(rendered[highlight].value);
     } else if (e.key === "Escape") {
       e.preventDefault();
+      // Only dismiss this panel — don't let a containing Modal close too
+      e.stopPropagation();
       close();
     }
   }
