@@ -4,9 +4,10 @@ import { RefreshCw, Wrench } from "lucide-react";
 import { useAuth } from "../../lib/auth";
 import { useLookupMaps } from "../../lib/lookups";
 import { invalidateLookup } from "../../lib/lookups";
-import { fmtCurrency, fmtDate, fmtHours } from "../../lib/format";
+import { fmtCurrency, fmtDate, fmtHours, timeAgo } from "../../lib/format";
 import { notifyTimeEntriesChanged } from "../../components/TimerWidget";
 import {
+  fetchDeletedRecords,
   fetchNoTaskEntries,
   fetchOverdueTasks,
   fetchPastDueInvoices,
@@ -15,8 +16,10 @@ import {
   fetchUnlinkedEntryGroups,
   fixSummaryGroup,
   markInvoicesOverdue,
+  restoreRecord,
   restoreSoftDeleted,
   stopStuckTimers,
+  type DeletedRecord,
   type NoTaskEntry,
   type OverdueTask,
   type PastDueInvoice,
@@ -108,6 +111,9 @@ export default function MaintenancePage() {
   const [softDeleted, setSoftDeleted] = useState<
     { table: SoftDeleteTable; count: number }[] | null
   >(null);
+  // Trash drill-down: which table is expanded and its deleted rows
+  const [expandedTrash, setExpandedTrash] = useState<string | null>(null);
+  const [trashRows, setTrashRows] = useState<DeletedRecord[] | null>(null);
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null); // id of the running fix
@@ -129,6 +135,23 @@ export default function MaintenancePage() {
   }, []);
 
   useEffect(loadAll, [loadAll]);
+
+  // Refresh the expanded trash list whenever it opens or a restore lands
+  useEffect(() => {
+    if (!expandedTrash) return;
+    let live = true;
+    setTrashRows(null);
+    fetchDeletedRecords(expandedTrash).then((rows) => {
+      if (live) setTrashRows(rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [expandedTrash, softDeleted]);
+
+  function toggleTrash(table: string) {
+    setExpandedTrash((cur) => (cur === table ? null : table));
+  }
 
   const loading =
     !unlinked || !stuck || !noTask || !overdueTasks || !pastDue || !softDeleted;
@@ -432,24 +455,68 @@ export default function MaintenancePage() {
               <div className="space-y-2 text-sm">
                 {softDeleted!
                   .filter((t) => t.count > 0)
-                  .map((t) => (
-                    <div key={t.table} className="flex flex-wrap items-center gap-3">
-                      <span className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] w-40">
-                        {t.table}
-                      </span>
-                      <span className="font-[var(--font-mono)] text-xs">{t.count}</span>
-                      <Button
-                        variant="ghost"
-                        className="!px-3 !py-1"
-                        disabled={!!busy}
-                        onClick={() =>
-                          setConfirm({ kind: "restore", table: t.table, count: t.count })
-                        }
-                      >
-                        Restore All
-                      </Button>
-                    </div>
-                  ))}
+                  .map((t) => {
+                    const open = expandedTrash === t.table;
+                    return (
+                      <div key={t.table}>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            onClick={() => toggleTrash(t.table)}
+                            className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] w-40 text-left hover:text-[var(--mint)] cursor-pointer transition-colors"
+                            aria-expanded={open}
+                          >
+                            {open ? "▾" : "▸"} {t.table}
+                          </button>
+                          <span className="font-[var(--font-mono)] text-xs">{t.count}</span>
+                          <Button
+                            variant="ghost"
+                            className="!px-3 !py-1"
+                            disabled={!!busy}
+                            onClick={() =>
+                              setConfirm({ kind: "restore", table: t.table, count: t.count })
+                            }
+                          >
+                            Restore All
+                          </Button>
+                        </div>
+                        {open && (
+                          <div className="mt-2 ml-4 pl-3 border-l border-[rgba(255,255,255,0.08)] space-y-1.5">
+                            {trashRows === null ? (
+                              <p className="label-mono">Loading…</p>
+                            ) : trashRows.length === 0 ? (
+                              <p className="label-mono">Nothing to show.</p>
+                            ) : (
+                              trashRows.map((r) => (
+                                <div
+                                  key={r.id}
+                                  className="flex flex-wrap items-center gap-3"
+                                >
+                                  <span className="text-[var(--text-light)] truncate max-w-[260px]">
+                                    {r.title}
+                                  </span>
+                                  <span className="label-mono">
+                                    {r.updated_at ? timeAgo(r.updated_at) : "—"}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    className="!px-2.5 !py-0.5 !text-xs"
+                                    disabled={!!busy}
+                                    onClick={() =>
+                                      runFix(`restore-${r.id}`, () =>
+                                        restoreRecord(t.table, r.id, r.title, profile),
+                                      )
+                                    }
+                                  >
+                                    Restore
+                                  </Button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </CheckCard>
           </div>

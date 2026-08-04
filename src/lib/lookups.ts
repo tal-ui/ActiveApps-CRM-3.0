@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import { OBJECTS, recordTitle } from "./objects";
+import { OBJECTS, SOFT_DELETE_OBJECTS, recordTitle } from "./objects";
 
 export interface LookupOption {
   value: string;
@@ -20,9 +20,10 @@ export async function fetchLookupOptions(object: string): Promise<LookupOption[]
 
   const cols = ["id", ...def.titleFields.filter((f) => f !== "id")].join(",");
   const promise = (async () => {
-    const { data } = await supabase
-      .from(object)
-      .select(cols)
+    let q = supabase.from(object).select(cols);
+    // Deleted records must not appear as pickable lookup targets
+    if (SOFT_DELETE_OBJECTS.has(object)) q = q.eq("is_deleted", false);
+    const { data } = await q
       .order("updated_at", { ascending: false })
       .limit(1000);
     const rows = (data ?? []) as unknown as Record<string, unknown>[];

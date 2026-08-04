@@ -77,9 +77,9 @@ const NAV_GROUPS: { key: string; label: string; items: NavEntry[] }[] = [
     key: "settings",
     label: "Settings & Setup",
     items: [
-      { to: "/settings/custom-fields", label: "Custom Fields", icon: SlidersHorizontal },
-      { to: "/settings/layouts", label: "Page Layouts", icon: LayoutPanelLeft },
-      { to: "/settings/slack", label: "Slack", icon: Slack },
+      { to: "/settings/custom-fields", label: "Custom Fields", icon: SlidersHorizontal, adminOnly: true },
+      { to: "/settings/layouts", label: "Page Layouts", icon: LayoutPanelLeft, adminOnly: true },
+      { to: "/settings/slack", label: "Slack", icon: Slack, adminOnly: true },
       { to: "/settings/maintenance", label: "Maintenance", icon: Wrench, adminOnly: true },
       { to: "/settings/users", label: "Users & Roles", icon: Users, adminOnly: true },
       { to: "/settings/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },

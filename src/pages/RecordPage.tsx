@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileCheck2, FolderKanban, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { OBJECTS, recordTitle, type RelatedListDef } from "../lib/objects";
+import {
+  OBJECTS,
+  SOFT_DELETE_OBJECTS,
+  recordTitle,
+  type RelatedListDef,
+} from "../lib/objects";
 import { invalidateLookup, useLookupMaps } from "../lib/lookups";
 import { timeAgo } from "../lib/format";
 import {
@@ -16,7 +21,7 @@ import {
   isCustomFieldName,
   type LayoutJson,
 } from "../lib/layouts";
-import { Button, EmptyState, Modal, Spinner } from "../components/ui";
+import { Button, EmptyState, ErrorNote, Modal, Spinner } from "../components/ui";
 import FieldValue from "../components/FieldValue";
 import { CustomFieldDisplay } from "../components/customFields";
 import RecordForm from "../components/RecordForm";
@@ -56,6 +61,7 @@ export default function RecordPage() {
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [showConvert, setShowConvert] = useState(false);
   const [showProjectConvert, setShowProjectConvert] = useState(false);
   const [showQuoteCreate, setShowQuoteCreate] = useState(false);
@@ -226,7 +232,25 @@ export default function RecordPage() {
     .map((name) => visibleFields.find((f) => f.name === name))
     .filter((f): f is NonNullable<typeof f> => !!f);
 
+  const softDeletes = SOFT_DELETE_OBJECTS.has(object);
+
   async function onDelete() {
+    if (softDeletes) {
+      // Recoverable: flag the row and leave custom field values + attachments
+      // intact so Settings → Maintenance can restore the record whole.
+      const { error } = await supabase
+        .from(object)
+        .update({ is_deleted: true, updated_at: Date.now() })
+        .eq("id", id);
+      if (error) {
+        setDeleteError(error.message);
+        return;
+      }
+      invalidateLookup(object);
+      navigate(`/${object}`);
+      return;
+    }
+
     await supabase
       .from("custom_field_values")
       .delete()
@@ -251,7 +275,11 @@ export default function RecordPage() {
           .eq("entity_id", id);
       }
     }
-    await supabase.from(object).delete().eq("id", id);
+    const { error } = await supabase.from(object).delete().eq("id", id);
+    if (error) {
+      setDeleteError(error.message);
+      return;
+    }
     invalidateLookup(object);
     navigate(`/${object}`);
   }
@@ -437,10 +465,25 @@ export default function RecordPage() {
       {showDelete && (
         <Modal title={`Delete ${def.singular}?`} onClose={() => setShowDelete(false)}>
           <p className="text-sm text-[var(--text-mid)] mb-6">
-            This will permanently delete{" "}
-            <span className="text-[var(--foreground)]">{title}</span> and its
-            custom field values. This action cannot be undone.
+            {softDeletes ? (
+              <>
+                <span className="text-[var(--foreground)]">{title}</span> will be
+                removed from lists and lookups. An admin can restore it from
+                Settings → Maintenance.
+              </>
+            ) : (
+              <>
+                This will permanently delete{" "}
+                <span className="text-[var(--foreground)]">{title}</span> and its
+                custom field values. This action cannot be undone.
+              </>
+            )}
           </p>
+          {deleteError && (
+            <div className="mb-4">
+              <ErrorNote message={deleteError} />
+            </div>
+          )}
           <div className="flex justify-end gap-3">
             <Button variant="subtle" onClick={() => setShowDelete(false)}>
               Cancel

@@ -1,5 +1,6 @@
 import {
   Building2,
+  UserCog,
   Users,
   Target,
   TrendingUp,
@@ -85,11 +86,25 @@ export interface ObjectDef {
   ownerFields?: string[]; // auto-filled with current profile id on create
 }
 
+// Shared by leads, accounts and opportunities so source attribution survives
+// lead conversion with identical values.
+const LEAD_SOURCE_VALUES = [
+  "website",
+  "referral",
+  "linkedin",
+  "conference",
+  "cold_outreach",
+  "partner",
+  "other",
+];
+
 const opts = (...vals: string[]): PicklistOption[] =>
   vals.map((v) => ({
     value: v,
     label: v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
   }));
+
+const LEAD_SOURCES: PicklistOption[] = opts(...LEAD_SOURCE_VALUES);
 
 export const OBJECTS: Record<string, ObjectDef> = {
   leads: {
@@ -110,7 +125,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "title", label: "Title", type: "text", section: "Lead Information" },
       { name: "email", label: "Email", type: "email", section: "Contact Details", showInList: true },
       { name: "phone", label: "Phone", type: "phone", section: "Contact Details" },
-      { name: "source", label: "Source", type: "picklist", section: "Qualification", options: opts("website", "referral", "linkedin", "conference", "cold_outreach", "partner", "other"), showInList: true },
+      { name: "source", label: "Source", type: "picklist", section: "Qualification", options: LEAD_SOURCES, showInList: true },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "new", section: "Qualification", options: opts("new", "contacted", "qualified", "unqualified", "converted"), showInList: true },
       { name: "rating", label: "Rating", type: "picklist", section: "Qualification", options: opts("hot", "warm", "cold") },
       { name: "description", label: "Description", type: "textarea", section: "Notes" },
@@ -132,6 +147,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "name", label: "Account Name", type: "text", required: true, section: "Account Information", showInList: true },
       { name: "type", label: "Type", type: "picklist", required: true, defaultValue: "prospect", section: "Account Information", options: opts("prospect", "customer", "partner", "vendor", "other"), showInList: true },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "active", section: "Account Information", options: opts("active", "inactive", "churned"), showInList: true },
+      { name: "source", label: "Source", type: "picklist", section: "Account Information", options: LEAD_SOURCES },
       { name: "industry", label: "Industry", type: "text", section: "Account Information", showInList: true },
       { name: "website", label: "Website", type: "url", section: "Contact Details" },
       { name: "phone", label: "Phone", type: "phone", section: "Contact Details" },
@@ -202,6 +218,9 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "contact_id", label: "Primary Contact", type: "lookup", lookup: "contacts", section: "Deal Information" },
       { name: "stage", label: "Stage", type: "picklist", required: true, defaultValue: "discovery", section: "Deal Information", options: opts("discovery", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"), showInList: true },
       { name: "type", label: "Type", type: "picklist", section: "Deal Information", options: opts("new_business", "expansion", "renewal", "other") },
+      // Carried from the originating lead on conversion — lets won revenue be
+      // traced back to the channel that produced it.
+      { name: "source", label: "Source", type: "picklist", section: "Deal Information", options: LEAD_SOURCES },
       { name: "amount", label: "Amount", type: "currency", section: "Financials", showInList: true },
       { name: "currency", label: "Currency", type: "text", defaultValue: "ILS", section: "Financials" },
       { name: "probability", label: "Probability (%)", type: "number", section: "Financials" },
@@ -286,6 +305,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "project_id", label: "Project", type: "lookup", lookup: "projects", required: true, section: "Task Information", showInList: true, dependsOn: { field: "account_id", column: "account_id", exclude: { column: "status", values: ["completed", "cancelled"] } } },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "todo", section: "Task Information", options: opts("todo", "in_progress", "in_review", "done", "blocked"), showInList: true },
       { name: "priority", label: "Priority", type: "picklist", section: "Task Information", options: opts("low", "medium", "high", "urgent"), showInList: true },
+      { name: "assignee_id", label: "Assignee", type: "lookup", lookup: "profiles", section: "Task Information", showInList: true },
       { name: "due_date", label: "Due Date", type: "date", section: "Planning", showInList: true },
       { name: "estimated_hours", label: "Estimated Hours", type: "number", section: "Planning" },
       { name: "description", label: "Details", type: "textarea", section: "Notes" },
@@ -465,7 +485,44 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { object: "time_entries", foreignKey: "monthly_summary_id", title: "Time Entries", columns: ["task_id", "date", "duration", "hourly_rate"] },
     ],
   },
+
+  // Team members — not a CRM object users create records in; registered so
+  // user lookups (task assignee, and future owner fields) resolve to names.
+  // Managed at /settings/users, hence no nav entry and no editable fields.
+  profiles: {
+    name: "profiles",
+    singular: "User",
+    plural: "Users",
+    icon: UserCog,
+    titleFields: ["full_name"],
+    highlightFields: ["email", "title", "role"],
+    searchFields: ["full_name", "email"],
+    fields: [
+      { name: "full_name", label: "Name", type: "text", readOnly: true, section: "User", showInList: true },
+      { name: "email", label: "Email", type: "email", readOnly: true, section: "User", showInList: true },
+      { name: "title", label: "Title", type: "text", readOnly: true, section: "User" },
+      { name: "role", label: "Role", type: "text", readOnly: true, section: "User", showInList: true },
+      { name: "is_active", label: "Active", type: "boolean", readOnly: true, section: "User", showInList: true },
+    ],
+  },
 };
+
+// Objects whose delete flags `is_deleted` instead of removing the row, so a
+// record can be restored from Settings → Maintenance. Lists, related lists and
+// lookups all filter these out.
+export const SOFT_DELETE_OBJECTS = new Set([
+  "leads",
+  "accounts",
+  "contacts",
+  "opportunities",
+  "projects",
+  "tasks",
+  "time_entries",
+  "invoices",
+  "quotes",
+  "monthly_summaries",
+  "services",
+]);
 
 export const NAV_OBJECTS = [
   "leads",

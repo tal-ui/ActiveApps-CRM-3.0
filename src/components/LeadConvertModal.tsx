@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { ArrowRight } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowRight, Link2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { invalidateLookup } from "../lib/lookups";
@@ -13,6 +13,11 @@ import {
   Select,
   Toggle,
 } from "./ui";
+
+interface MatchedAccount {
+  id: string;
+  name: string;
+}
 
 export default function LeadConvertModal({
   lead,
@@ -35,6 +40,44 @@ export default function LeadConvertModal({
   const [stage, setStage] = useState("discovery");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Duplicate guard: existing accounts whose name looks like this one. When
+  // the user picks one, we attach to it instead of creating a second account.
+  const [matches, setMatches] = useState<MatchedAccount[]>([]);
+  const [existingAccountId, setExistingAccountId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = accountName.trim();
+    if (q.length < 2) {
+      setMatches([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(() => {
+      supabase
+        .from("accounts")
+        .select("id, name")
+        .eq("is_deleted", false)
+        .ilike("name", `%${q}%`)
+        .limit(5)
+        .then(({ data }) => {
+          if (live) setMatches((data ?? []) as MatchedAccount[]);
+        });
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [accountName]);
+
+  // A picked account stops being valid if the name is edited away from it
+  useEffect(() => {
+    if (
+      existingAccountId &&
+      !matches.some((m) => m.id === existingAccountId)
+    ) {
+      setExistingAccountId(null);
+    }
+  }, [matches, existingAccountId]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -47,26 +90,32 @@ export default function LeadConvertModal({
     const now = Date.now();
     const me = profile?.id ?? "system";
 
-    // 1. Create Account
-    const { data: account, error: accErr } = await supabase
-      .from("accounts")
-      .insert({
-        name: accountName.trim(),
-        type: "prospect",
-        status: "active",
-        owner_id: me,
-        created_by_id: me,
-        created_at: now,
-        updated_at: now,
-      })
-      .select("id")
-      .single();
-    if (accErr || !account) {
-      setBusy(false);
-      setError(accErr?.message ?? "Failed to create account.");
-      return;
+    // 1. Attach to the chosen existing account, or create a new one
+    let accountId: string;
+    if (existingAccountId) {
+      accountId = existingAccountId;
+    } else {
+      const { data: account, error: accErr } = await supabase
+        .from("accounts")
+        .insert({
+          name: accountName.trim(),
+          type: "prospect",
+          status: "active",
+          source: lead.source ?? null,
+          owner_id: me,
+          created_by_id: me,
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id")
+        .single();
+      if (accErr || !account) {
+        setBusy(false);
+        setError(accErr?.message ?? "Failed to create account.");
+        return;
+      }
+      accountId = (account as { id: string }).id;
     }
-    const accountId = (account as { id: string }).id;
 
     // 2. Create Contact
     const { data: contact, error: conErr } = await supabase
@@ -106,6 +155,7 @@ export default function LeadConvertModal({
           amount: amount ? parseFloat(amount) : null,
           currency: DEFAULT_CURRENCY,
           type: "new_business",
+          source: lead.source ?? null,
           owner_id: me,
           created_by_id: me,
           created_at: now,
@@ -150,8 +200,9 @@ export default function LeadConvertModal({
   return (
     <Modal title="Convert Lead" onClose={onClose}>
       <p className="text-sm text-[var(--text-mid)] mb-5">
-        Converting creates an <span className="text-[var(--mint)]">Account</span>,
-        a <span className="text-[var(--mint)]">Contact</span>
+        Converting {existingAccountId ? "links to the selected" : "creates an"}{" "}
+        <span className="text-[var(--mint)]">Account</span>, creates a{" "}
+        <span className="text-[var(--mint)]">Contact</span>
         {createOpp && (
           <>
             {" "}and an <span className="text-[var(--mint)]">Opportunity</span>
@@ -166,7 +217,42 @@ export default function LeadConvertModal({
           <Input
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
+            disabled={!!existingAccountId}
           />
+          {matches.length > 0 && (
+            <div className="mt-2 bg-[var(--section-darker)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-md)] p-3">
+              <p className="label-mono mb-2">
+                {existingAccountId
+                  ? "Linking to existing account"
+                  : "Similar accounts already exist"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {matches.map((m) => {
+                  const picked = existingAccountId === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setExistingAccountId(picked ? null : m.id)}
+                      className={`inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs cursor-pointer transition-colors ${
+                        picked
+                          ? "bg-[rgba(60,201,152,0.1)] border-[rgba(60,201,152,0.35)] text-[var(--mint)]"
+                          : "border-[rgba(255,255,255,0.12)] text-[var(--text-mid)] hover:text-[var(--foreground)] hover:border-[rgba(60,201,152,0.25)]"
+                      }`}
+                    >
+                      <Link2 size={12} strokeWidth={1.5} />
+                      {m.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[0.68rem] text-[var(--text-faint)] mt-2">
+                {existingAccountId
+                  ? "Click again to unlink and create a new account instead."
+                  : "Pick one to attach this lead to it instead of creating a duplicate."}
+              </p>
+            </div>
+          )}
         </div>
         <div className="pt-1">
           <Toggle
@@ -182,7 +268,7 @@ export default function LeadConvertModal({
               <Input value={oppName} onChange={(e) => setOppName(e.target.value)} />
             </div>
             <div>
-              <FieldLabel>Amount (USD)</FieldLabel>
+              <FieldLabel>Amount ({DEFAULT_CURRENCY})</FieldLabel>
               <Input
                 type="number"
                 step="any"

@@ -4,6 +4,7 @@
 import { supabase } from "./supabase";
 import type { Profile } from "./auth";
 import { insertAudit } from "./audit";
+import { OBJECTS, SOFT_DELETE_OBJECTS, recordTitle } from "./objects";
 import {
   ensureMonthlySummary,
   linkEntriesToSummary,
@@ -254,14 +255,10 @@ export async function markInvoicesOverdue(
 
 /* ---------- (f) Soft-deleted rows (restore) ---------- */
 
-export const SOFT_DELETE_TABLES = [
-  "accounts",
-  "projects",
-  "tasks",
-  "time_entries",
-  "monthly_summaries",
-] as const;
-export type SoftDeleteTable = (typeof SOFT_DELETE_TABLES)[number];
+// Every object whose record page soft-deletes (see SOFT_DELETE_OBJECTS) can
+// be restored here, so the Trash view covers everything the UI can delete.
+export const SOFT_DELETE_TABLES = [...SOFT_DELETE_OBJECTS] as const;
+export type SoftDeleteTable = string;
 
 export async function fetchSoftDeletedCounts(): Promise<
   { table: SoftDeleteTable; count: number }[]
@@ -276,6 +273,50 @@ export async function fetchSoftDeletedCounts(): Promise<
     }),
   );
   return counts;
+}
+
+export interface DeletedRecord {
+  id: string;
+  title: string;
+  updated_at: number | null;
+}
+
+/** Deleted rows for one table, labelled with the object's title fields. */
+export async function fetchDeletedRecords(
+  table: SoftDeleteTable,
+): Promise<DeletedRecord[]> {
+  const def = OBJECTS[table];
+  const { data } = await supabase
+    .from(table)
+    .select("*")
+    .eq("is_deleted", true)
+    .order("updated_at", { ascending: false })
+    .limit(100);
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    title: def ? recordTitle(def, r) : String(r.id),
+    updated_at: (r.updated_at as number) ?? null,
+  }));
+}
+
+export async function restoreRecord(
+  table: SoftDeleteTable,
+  id: string,
+  title: string,
+  profile: Profile | null,
+): Promise<string | null> {
+  const { error } = await supabase
+    .from(table)
+    .update({ is_deleted: false, updated_at: Date.now() })
+    .eq("id", id);
+  if (error) return error.message;
+  void insertAudit(profile, {
+    action: "restore",
+    entity_type: table,
+    entity_id: id,
+    summary: `Maintenance: restored ${table} "${title}"`,
+  });
+  return null;
 }
 
 export async function restoreSoftDeleted(

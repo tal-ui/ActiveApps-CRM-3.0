@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Download, Kanban, Plus, Search, Wand2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { OBJECTS, type FieldDef } from "../lib/objects";
+import { OBJECTS, SOFT_DELETE_OBJECTS, type FieldDef } from "../lib/objects";
 import { invalidateLookup, useLookupMaps } from "../lib/lookups";
 import { downloadCsv } from "../lib/csv";
 import { msToDateInput } from "../lib/format";
@@ -99,10 +99,9 @@ export default function ListPage() {
     if (!def) return;
     setLoading(true);
     setPage(0);
-    supabase
-      .from(object)
-      .select("*")
-      .order("updated_at", { ascending: false })
+    let q = supabase.from(object).select("*");
+    if (SOFT_DELETE_OBJECTS.has(object)) q = q.eq("is_deleted", false);
+    q.order("updated_at", { ascending: false })
       .limit(1000)
       .then(({ data }) => {
         setRows((data ?? []) as Record<string, unknown>[]);

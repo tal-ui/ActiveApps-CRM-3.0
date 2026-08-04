@@ -56,10 +56,12 @@ export default function App() {
             <Route path="/pipeline" element={<PipelinePage />} />
             <Route path="/tasks/board" element={<TaskBoardPage />} />
             <Route path="/time_entries" element={<TimeTrackingPage />} />
-            <Route path="/settings/custom-fields" element={<CustomFieldsPage />} />
-            <Route path="/settings/layouts" element={<LayoutBuilderPage />} />
-            <Route path="/settings/slack" element={<SlackIntegrationPage />} />
             <Route element={<RequireAdmin />}>
+              {/* Setup screens change the schema, every page layout, or hold
+                  integration secrets — admin only. */}
+              <Route path="/settings/custom-fields" element={<CustomFieldsPage />} />
+              <Route path="/settings/layouts" element={<LayoutBuilderPage />} />
+              <Route path="/settings/slack" element={<SlackIntegrationPage />} />
               <Route path="/settings/maintenance" element={<MaintenancePage />} />
               <Route path="/settings/users" element={<UsersRolesPage />} />
               <Route path="/settings/audit" element={<AuditLogPage />} />

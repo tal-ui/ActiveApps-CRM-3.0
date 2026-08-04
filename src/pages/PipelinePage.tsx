@@ -16,11 +16,30 @@ interface Opportunity {
   amount: number | string | null;
   currency: string | null;
   close_date: number | null;
+  probability: number | null;
 }
 
 const STAGES: PicklistOption[] =
   OBJECTS.opportunities.fields.find((f) => f.name === "stage")?.options ?? [];
 const CLOSED = ["closed_won", "closed_lost"];
+
+// Default win probability per stage. Applied when a deal moves stage, unless
+// the deal carries a manually set probability that differs from its old
+// stage's default (i.e. someone deliberately overrode it).
+export const STAGE_PROBABILITY: Record<string, number> = {
+  discovery: 10,
+  qualification: 25,
+  proposal: 50,
+  negotiation: 75,
+  closed_won: 100,
+  closed_lost: 0,
+};
+
+/** Probability to use for weighting — falls back to the stage default. */
+function weightOf(o: Opportunity): number {
+  const p = o.probability ?? STAGE_PROBABILITY[o.stage] ?? 0;
+  return Number(o.amount ?? 0) * (p / 100);
+}
 
 function DealCardBody({
   opp,
@@ -71,6 +90,7 @@ export default function PipelinePage() {
     return {
       openCount: open.length,
       openTotal: open.reduce((s, o) => s + Number(o.amount ?? 0), 0),
+      weightedTotal: open.reduce((s, o) => s + weightOf(o), 0),
     };
   }, [opps]);
 
@@ -78,11 +98,20 @@ export default function PipelinePage() {
     const opp = (opps ?? []).find((o) => o.id === id);
     if (!opp || opp.stage === toStage) return null;
     const fromStage = opp.stage;
+    // Respect a manual override: only re-apply the stage default when the
+    // current value is empty or still equals the previous stage's default.
+    const overridden =
+      opp.probability != null &&
+      opp.probability !== STAGE_PROBABILITY[fromStage];
+    const nextProbability = overridden
+      ? opp.probability
+      : (STAGE_PROBABILITY[toStage] ?? opp.probability);
     setError("");
     const { error: err } = await supabase
       .from("opportunities")
       .update({
         stage: toStage,
+        probability: nextProbability,
         updated_at: Date.now(),
         // stamp the close date entering a closed stage; clear it when a deal
         // is reopened so reporting never sees an open deal with a close date
@@ -95,7 +124,13 @@ export default function PipelinePage() {
       .eq("id", id);
     if (err) return err.message;
     setOpps((prev) =>
-      prev ? prev.map((o) => (o.id === id ? { ...o, stage: toStage } : o)) : prev,
+      prev
+        ? prev.map((o) =>
+            o.id === id
+              ? { ...o, stage: toStage, probability: nextProbability ?? null }
+              : o,
+          )
+        : prev,
     );
     return null;
   }
@@ -115,7 +150,8 @@ export default function PipelinePage() {
             </h1>
             <p className="label-mono">
               {view.openCount} open deal{view.openCount === 1 ? "" : "s"} ·{" "}
-              {fmtCurrency(view.openTotal)} in play
+              {fmtCurrency(view.openTotal)} in play ·{" "}
+              {fmtCurrency(view.weightedTotal)} weighted
             </p>
           </div>
         </div>
@@ -139,18 +175,30 @@ export default function PipelinePage() {
           columnMeta={(deals, stage) => {
             const won = stage.value === "closed_won";
             const lost = stage.value === "closed_lost";
+            const total = deals.reduce((sum, o) => sum + Number(o.amount ?? 0), 0);
+            const weighted = deals.reduce((sum, o) => sum + weightOf(o), 0);
             return (
-              <p
-                className={`font-[var(--font-mono)] text-xs ${
-                  won
-                    ? "text-[var(--mint)]"
-                    : lost
-                      ? "text-[var(--text-faint)]"
-                      : "text-[var(--text-mid)]"
-                }`}
-              >
-                {fmtCurrency(deals.reduce((sum, o) => sum + Number(o.amount ?? 0), 0))}
-              </p>
+              <div className="text-right">
+                <p
+                  className={`font-[var(--font-mono)] text-xs ${
+                    won
+                      ? "text-[var(--mint)]"
+                      : lost
+                        ? "text-[var(--text-faint)]"
+                        : "text-[var(--text-mid)]"
+                  }`}
+                >
+                  {fmtCurrency(total)}
+                </p>
+                {!won && !lost && deals.length > 0 && (
+                  <p
+                    className="font-[var(--font-mono)] text-[0.62rem] text-[var(--text-faint)]"
+                    title="Weighted by win probability"
+                  >
+                    {fmtCurrency(weighted)} wtd
+                  </p>
+                )}
+              </div>
             );
           }}
           renderCard={(o) => (

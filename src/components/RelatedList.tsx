@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { OBJECTS, type RelatedListDef } from "../lib/objects";
+import { OBJECTS, SOFT_DELETE_OBJECTS, type RelatedListDef } from "../lib/objects";
 import { useLookupMaps } from "../lib/lookups";
 import { Button, EmptyState } from "./ui";
 import DataTable from "./DataTable";
@@ -46,11 +46,9 @@ export default function RelatedList({
   const lookupMaps = useLookupMaps(lookupObjects);
 
   useEffect(() => {
-    supabase
-      .from(def.object)
-      .select("*")
-      .eq(def.foreignKey, parentId)
-      .order("created_at", { ascending: false })
+    let q = supabase.from(def.object).select("*").eq(def.foreignKey, parentId);
+    if (SOFT_DELETE_OBJECTS.has(def.object)) q = q.eq("is_deleted", false);
+    q.order("created_at", { ascending: false })
       .limit(200)
       .then(({ data }) => setRows((data ?? []) as Record<string, unknown>[]));
   }, [def, parentId, reload]);
