@@ -1,10 +1,21 @@
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Webhook, Zap } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+  Webhook,
+  Zap,
+} from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { insertAudit } from "../../lib/audit";
 import { fmtDateTime, timeAgo, titleCase } from "../../lib/format";
+import { OBJECTS } from "../../lib/objects";
 import {
+  ConfirmModal,
   EmptyState,
   ErrorNote,
   Modal,
@@ -12,27 +23,15 @@ import {
   Spinner,
   Toggle,
 } from "../../components/ui";
+import AutomationRuleForm, {
+  type AutomationRule,
+} from "../../components/AutomationRuleForm";
+import WebhookForm, { type WebhookRow } from "../../components/WebhookForm";
 
-interface RuleRow {
-  id: string;
-  name: string;
-  description: string | null;
-  trigger_event: string;
-  conditions: unknown;
-  actions: unknown;
-  enabled: boolean;
+type RuleRow = AutomationRule & {
   run_count: number;
   last_run: number | null;
-}
-
-interface WebhookRow {
-  id: string;
-  name: string;
-  url: string;
-  events: string[] | null;
-  enabled: boolean;
-  last_delivery: number | null;
-}
+};
 
 interface DeliveryRow {
   id: string;
@@ -70,11 +69,20 @@ export default function AutomationsPage() {
   const [deliveries, setDeliveries] = useState<DeliveryRow[] | null>(null);
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [editRule, setEditRule] = useState<AutomationRule | null | undefined>(undefined);
+  const [editHook, setEditHook] = useState<WebhookRow | null | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<
+    { kind: "rule" | "webhook"; id: string; name: string } | null
+  >(null);
+  const [busy, setBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string>("");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     supabase
       .from("automation_rules")
-      .select("id, name, description, trigger_event, conditions, actions, enabled, run_count, last_run")
+      .select(
+        "id, name, description, object_name, trigger_event, trigger_field, conditions, actions, enabled, run_count, last_run",
+      )
       .order("name")
       .then(({ data, error: err }) => {
         if (err) setError(err.message);
@@ -90,6 +98,49 @@ export default function AutomationsPage() {
         setHooks((data ?? []) as WebhookRow[]);
       });
   }, []);
+
+  useEffect(load, [load]);
+
+  async function removeTarget() {
+    if (!deleteTarget) return;
+    setBusy(true);
+    const table = deleteTarget.kind === "rule" ? "automation_rules" : "webhooks";
+    const { error: err } = await supabase.from(table).delete().eq("id", deleteTarget.id);
+    setBusy(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    void insertAudit(profile, {
+      action: "delete",
+      entity_type: deleteTarget.kind === "rule" ? "automation_rule" : "webhook",
+      entity_id: deleteTarget.id,
+      summary: `Deleted ${deleteTarget.kind} "${deleteTarget.name}"`,
+    });
+    setDeleteTarget(null);
+    load();
+  }
+
+  async function testWebhook(hook: WebhookRow) {
+    setBusy(true);
+    setTestResult("");
+    setError("");
+    const { data, error: err } = await supabase.functions.invoke("automations", {
+      body: { type: "TEST_WEBHOOK", webhook_id: hook.id },
+    });
+    setBusy(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    const ok = (data as { ok?: boolean })?.ok;
+    setTestResult(
+      ok
+        ? `✓ ${hook.name} responded successfully`
+        : `✗ ${hook.name} failed — see Deliveries for details`,
+    );
+    load();
+  }
 
   useEffect(() => {
     if (!deliveryHook) {
@@ -156,6 +207,11 @@ export default function AutomationsPage() {
           <ErrorNote message={error} />
         </div>
       )}
+      {testResult && (
+        <div className="mb-6 bg-[var(--card)] border border-[rgba(60,201,152,0.25)] rounded-[var(--radius-md)] px-4 py-3 text-sm text-[var(--text-light)]">
+          {testResult}
+        </div>
+      )}
 
       {/* Automation rules */}
       <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5 mb-6">
@@ -165,11 +221,18 @@ export default function AutomationsPage() {
             Automation Rules
           </h3>
           <span className="label-mono">({rules?.length ?? "…"})</span>
+          <Button
+            className="!px-3 !py-1.5 ml-auto"
+            onClick={() => setEditRule(null)}
+          >
+            <Plus size={14} strokeWidth={2} />
+            New Rule
+          </Button>
         </div>
         {!rules ? (
           <Spinner />
         ) : rules.length === 0 ? (
-          <EmptyState message="No automation rules configured." />
+          <EmptyState message="No automation rules yet. Create one to react to record changes." />
         ) : (
           <div className="space-y-1">
             {rules.map((r) => {
@@ -188,11 +251,28 @@ export default function AutomationsPage() {
                         <ChevronRight size={14} className="text-[var(--text-faint)] shrink-0" />
                       )}
                       <span className="text-sm text-[var(--foreground)] truncate">{r.name}</span>
-                      <span className="label-mono shrink-0">{titleCase(r.trigger_event)}</span>
+                      <span className="label-mono shrink-0">
+                        {r.object_name ? OBJECTS[r.object_name]?.plural ?? r.object_name : "—"} ·{" "}
+                        {titleCase(r.trigger_event)}
+                      </span>
                     </button>
                     <span className="text-xs text-[var(--text-dim)] shrink-0 hidden md:inline">
                       {r.run_count} runs · {r.last_run ? timeAgo(r.last_run) : "never"}
                     </span>
+                    <button
+                      onClick={() => setEditRule(r)}
+                      className="text-[var(--text-dim)] hover:text-[var(--mint)] cursor-pointer transition-colors p-1.5"
+                      aria-label={`Edit rule ${r.name}`}
+                    >
+                      <Pencil size={14} strokeWidth={1.5} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget({ kind: "rule", id: r.id, name: r.name })}
+                      className="text-[var(--text-dim)] hover:text-[#F2697A] cursor-pointer transition-colors p-1.5"
+                      aria-label={`Delete rule ${r.name}`}
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
                     <Toggle checked={r.enabled} onChange={(v) => toggle("automation_rules", r, v)} />
                   </div>
                   {open && (
@@ -203,15 +283,40 @@ export default function AutomationsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <p className="label-mono mb-1.5">Conditions</p>
-                          <pre className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] bg-[var(--section-darker)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-md)] p-3 overflow-x-auto">
-                            {JSON.stringify(r.conditions, null, 2)}
-                          </pre>
+                          {(r.conditions?.rules ?? []).length === 0 ? (
+                            <p className="text-sm text-[var(--text-faint)]">
+                              Runs on every {titleCase(r.trigger_event).toLowerCase()} event.
+                            </p>
+                          ) : (
+                            <ul className="space-y-1 text-sm text-[var(--text-mid)]">
+                              {(r.conditions?.rules ?? []).map((c, i) => (
+                                <li key={i}>
+                                  <span className="font-[var(--font-mono)] text-xs">
+                                    {c.field}
+                                  </span>{" "}
+                                  {c.op.replace(/_/g, " ")}{" "}
+                                  <span className="text-[var(--foreground)]">{c.value}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                         <div>
                           <p className="label-mono mb-1.5">Actions</p>
-                          <pre className="font-[var(--font-mono)] text-xs text-[var(--text-mid)] bg-[var(--section-darker)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-md)] p-3 overflow-x-auto">
-                            {JSON.stringify(r.actions, null, 2)}
-                          </pre>
+                          <ul className="space-y-1 text-sm text-[var(--text-mid)]">
+                            {(r.actions ?? []).map((a, i) => (
+                              <li key={i}>
+                                <span className="text-[var(--mint)]">
+                                  {titleCase(a.type)}
+                                </span>
+                                {a.message ? ` — ${a.message}` : ""}
+                                {a.field ? ` — ${a.field} = ${a.value ?? ""}` : ""}
+                                {a.webhook_id
+                                  ? ` — ${hooks?.find((h) => h.id === a.webhook_id)?.name ?? "endpoint"}`
+                                  : ""}
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       </div>
                     </div>
@@ -231,11 +336,18 @@ export default function AutomationsPage() {
             Webhooks
           </h3>
           <span className="label-mono">({hooks?.length ?? "…"})</span>
+          <Button
+            className="!px-3 !py-1.5 ml-auto"
+            onClick={() => setEditHook(null)}
+          >
+            <Plus size={14} strokeWidth={2} />
+            New Webhook
+          </Button>
         </div>
         {!hooks ? (
           <Spinner />
         ) : hooks.length === 0 ? (
-          <EmptyState message="No webhooks configured." />
+          <EmptyState message="No endpoints yet. Add your Make scenario URL to start receiving events." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -267,13 +379,38 @@ export default function AutomationsPage() {
                       <Toggle checked={h.enabled} onChange={(v) => toggle("webhooks", h, v)} />
                     </td>
                     <td className="py-3">
-                      <Button
-                        variant="subtle"
-                        onClick={() => setDeliveryHook(h)}
-                        className="!px-3 !py-1.5"
-                      >
-                        Deliveries
-                      </Button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <Button
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => testWebhook(h)}
+                          className="!px-3 !py-1.5"
+                        >
+                          <Send size={13} strokeWidth={1.5} />
+                          Test
+                        </Button>
+                        <Button
+                          variant="subtle"
+                          onClick={() => setDeliveryHook(h)}
+                          className="!px-3 !py-1.5"
+                        >
+                          Deliveries
+                        </Button>
+                        <button
+                          onClick={() => setEditHook(h)}
+                          className="text-[var(--text-dim)] hover:text-[var(--mint)] cursor-pointer transition-colors p-1.5"
+                          aria-label={`Edit webhook ${h.name}`}
+                        >
+                          <Pencil size={14} strokeWidth={1.5} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget({ kind: "webhook", id: h.id, name: h.name })}
+                          className="text-[var(--text-dim)] hover:text-[#F2697A] cursor-pointer transition-colors p-1.5"
+                          aria-label={`Delete webhook ${h.name}`}
+                        >
+                          <Trash2 size={14} strokeWidth={1.5} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -338,6 +475,45 @@ export default function AutomationsPage() {
             </div>
           )}
         </Modal>
+      )}
+
+      {editRule !== undefined && (
+        <AutomationRuleForm
+          rule={editRule}
+          webhooks={hooks ?? []}
+          onClose={() => setEditRule(undefined)}
+          onSaved={() => {
+            setEditRule(undefined);
+            load();
+          }}
+        />
+      )}
+      {editHook !== undefined && (
+        <WebhookForm
+          webhook={editHook}
+          onClose={() => setEditHook(undefined)}
+          onSaved={() => {
+            setEditHook(undefined);
+            load();
+          }}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmModal
+          title={`Delete ${deleteTarget.kind}`}
+          confirmLabel="Delete"
+          destructive
+          busy={busy}
+          onConfirm={removeTarget}
+          onClose={() => setDeleteTarget(null)}
+        >
+          <p>
+            Delete "{deleteTarget.name}"?{" "}
+            {deleteTarget.kind === "webhook"
+              ? "Rules pointing at this endpoint will stop delivering."
+              : "This can't be undone."}
+          </p>
+        </ConfirmModal>
       )}
     </div>
   );
