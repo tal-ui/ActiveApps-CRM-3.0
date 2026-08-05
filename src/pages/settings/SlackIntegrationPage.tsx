@@ -22,6 +22,7 @@ const EVENTS = [
   ["invoice_paid", "Invoice paid"],
   ["task_assigned", "Task assigned"],
   ["timer_reminder", "Timer running > 8 hours"],
+  ["retainer_generated", "Retainer invoice generated"],
 ] as const;
 
 const CHANNEL_KINDS = [

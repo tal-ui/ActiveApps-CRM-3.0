@@ -7,18 +7,42 @@ const MINT: [number, number, number] = [60, 201, 152];
 const GRAY: [number, number, number] = [110, 114, 120];
 const LIGHT: [number, number, number] = [244, 246, 248];
 
+/**
+ * Issuer identity for a legally-formed Israeli tax invoice: the business's
+ * name and ח.פ. / ע.מ. have to appear on the document.
+ *
+ * NOTE: jsPDF's built-in fonts carry no Hebrew glyphs (the same reason this
+ * file prints "ILS 1,234.00" rather than ₪). Hebrew entered in these fields
+ * will not render — use Latin text until a Hebrew font is embedded.
+ */
+export interface PdfIssuer {
+  legalName: string;
+  taxId: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
 export interface InvoicePdfData {
   invoiceNumber: string;
   status: string;
   issueDate: number;
   dueDate: number;
   accountName: string;
+  accountTaxId?: string | null;
+  accountAddress?: string | null;
   projectName: string | null;
   currency: string;
   subtotal: number;
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
+  amountPaid?: number;
+  balance?: number;
+  legalDocNumber?: string | null;
+  allocationNumber?: string | null;
+  issuer?: PdfIssuer;
+  footerText?: string;
   notes: string | null;
   lines: { description: string; quantity: number; unitPrice: number; total: number }[];
 }
@@ -46,6 +70,7 @@ export interface DocumentPdfData {
   number: string;
   partyLabel: string; // "BILLED TO" | "PREPARED FOR"
   partyName: string;
+  partyLines?: (string | null | undefined)[]; // tax id, address …
   subLine: string | null; // e.g. "Project: X" | "Opportunity: Y"
   meta: [string, string][]; // right-hand label/value rows
   qtyHeader: string; // "Hours / Qty" | "Qty"
@@ -56,6 +81,10 @@ export interface DocumentPdfData {
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
+  /** Extra rows under the total, e.g. amount paid / balance due. */
+  extraTotals?: [string, string][];
+  issuer?: PdfIssuer;
+  footerText?: string;
   notes: string | null;
   lines: { description: string; quantity: number; unitPrice: number; total: number }[];
 }
@@ -108,6 +137,22 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   doc.setTextColor(94, 98, 104);
   doc.text("T E C H   O R C H E S T R A T I O N", wordmarkX, 62);
 
+  // Issuer identity — required on an Israeli tax invoice.
+  const issuerLines = data.issuer
+    ? [
+        data.issuer.legalName,
+        data.issuer.taxId ? `Tax ID: ${data.issuer.taxId}` : "",
+        data.issuer.address,
+        [data.issuer.phone, data.issuer.email].filter(Boolean).join("  ·  "),
+      ].filter((l) => l && l.trim())
+    : [];
+  issuerLines.forEach((line, i) => {
+    doc.setFont("helvetica", i === 0 ? "bold" : "normal");
+    doc.setFontSize(i === 0 ? 8 : 7.5);
+    doc.setTextColor(...GRAY);
+    doc.text(line, margin, 76 + i * 10);
+  });
+
   // Document title + number (right aligned)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(24);
@@ -118,8 +163,8 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   doc.setTextColor(...MINT);
   doc.text(data.number, pageWidth - margin, 66, { align: "right" });
 
-  /* Meta block */
-  const metaY = 110;
+  /* Meta block — pushed down far enough to clear the issuer block */
+  const metaY = Math.max(110, 76 + issuerLines.length * 10 + 12);
   doc.setFont("courier", "bold");
   doc.setFontSize(7);
   doc.setTextColor(...GRAY);
@@ -128,11 +173,20 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   doc.setFontSize(12);
   doc.setTextColor(...NAVY);
   doc.text(data.partyName, margin, metaY + 16);
+  let partyY = metaY + 16;
+  for (const line of (data.partyLines ?? []).filter((l): l is string => !!l && !!l.trim())) {
+    partyY += 12;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...GRAY);
+    doc.text(line, margin, partyY);
+  }
   if (data.subLine) {
+    partyY += 13;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...GRAY);
-    doc.text(data.subLine, margin, metaY + 30);
+    doc.text(data.subLine, margin, partyY);
   }
 
   data.meta.forEach(([label, value], i) => {
@@ -149,7 +203,7 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
 
   /* Line items */
   autoTable(doc, {
-    startY: 170,
+    startY: Math.max(partyY, metaY + data.meta.length * 16) + 22,
     margin: { left: margin, right: margin },
     head: [["Description", data.qtyHeader, "Unit Price", "Amount"]],
     body: data.lines.map((l) => [
@@ -201,9 +255,12 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   };
   totalRow("SUBTOTAL", money(data.subtotal, data.currency));
   if (data.taxRate > 0) {
-    totalRow(`TAX (${data.taxRate}%)`, money(data.taxAmount, data.currency));
+    totalRow(`VAT (${data.taxRate}%)`, money(data.taxAmount, data.currency));
   }
   totalRow(data.totalLabel, money(data.totalAmount, data.currency), true);
+  for (const [label, value] of data.extraTotals ?? []) {
+    totalRow(label, value);
+  }
 
   /* Notes */
   if (data.notes) {
@@ -224,32 +281,56 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...GRAY);
-  doc.text("Generated by ActiveApps CRM", margin, pageHeight - 24);
+  doc.text(data.footerText?.trim() || "Generated by ActiveApps CRM", margin, pageHeight - 24);
   doc.text("activeapps.io", pageWidth - margin, pageHeight - 24, { align: "right" });
 
   doc.save(data.filename);
 }
 
 export function generateInvoicePdf(data: InvoicePdfData): Promise<void> {
+  // Once the invoice has been issued through the provider, the legal document
+  // number is the one that identifies it — the internal number becomes a
+  // reference, so both are shown.
+  const meta: [string, string][] = [
+    ["ISSUE DATE", fmtDate(data.issueDate)],
+    ["DUE DATE", fmtDate(data.dueDate)],
+    ["STATUS", data.status.toUpperCase()],
+  ];
+  // When issued, the provider's number becomes the document's identity and
+  // the internal number stays on as a cross-reference.
+  if (data.legalDocNumber) meta.push(["INTERNAL REF", data.invoiceNumber]);
+  if (data.allocationNumber) meta.push(["ALLOCATION #", data.allocationNumber]);
+
+  const extraTotals: [string, string][] = [];
+  if ((data.amountPaid ?? 0) > 0) {
+    extraTotals.push(["PAID", money(data.amountPaid ?? 0, data.currency)]);
+    extraTotals.push(["BALANCE DUE", money(data.balance ?? 0, data.currency)]);
+  }
+
   return generateDocumentPdf({
-    title: "INVOICE",
-    number: data.invoiceNumber,
+    // Only a document the provider has actually issued may call itself a tax
+    // invoice; anything else is still an internal draft.
+    title: data.legalDocNumber ? "TAX INVOICE" : "INVOICE",
+    number: data.legalDocNumber || data.invoiceNumber,
     partyLabel: "BILLED TO",
     partyName: data.accountName,
-    subLine: data.projectName ? `Project: ${data.projectName}` : null,
-    meta: [
-      ["ISSUE DATE", fmtDate(data.issueDate)],
-      ["DUE DATE", fmtDate(data.dueDate)],
-      ["STATUS", data.status.toUpperCase()],
+    partyLines: [
+      data.accountTaxId ? `Tax ID: ${data.accountTaxId}` : null,
+      data.accountAddress,
     ],
+    subLine: data.projectName ? `Project: ${data.projectName}` : null,
+    meta,
     qtyHeader: "Hours / Qty",
     totalLabel: "TOTAL DUE",
-    filename: `${data.invoiceNumber}.pdf`,
+    filename: `${data.legalDocNumber || data.invoiceNumber}.pdf`,
     currency: data.currency,
     subtotal: data.subtotal,
     taxRate: data.taxRate,
     taxAmount: data.taxAmount,
     totalAmount: data.totalAmount,
+    extraTotals,
+    issuer: data.issuer,
+    footerText: data.footerText,
     notes: data.notes,
     lines: data.lines,
   });

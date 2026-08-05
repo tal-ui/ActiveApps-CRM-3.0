@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { invalidateLookup, useLookupOptions } from "../lib/lookups";
 import { nextInvoiceNumber } from "../lib/docNumber";
+import { useWorkspaceSettings, vatRateFor } from "../lib/workspaceSettings";
 import { dateToMs, DEFAULT_CURRENCY, fmtCurrency, fmtHours, msToDateInput } from "../lib/format";
 import SearchableSelect from "./SearchableSelect";
 import {
@@ -33,6 +34,11 @@ interface ProjectRow {
   currency: string | null;
 }
 
+interface AccountRow {
+  id: string;
+  vat_exempt: boolean | null;
+}
+
 function startOfMonthInput(): string {
   const d = new Date();
   return msToDateInput(new Date(d.getFullYear(), d.getMonth(), 1).getTime());
@@ -51,11 +57,13 @@ export default function InvoiceGenerator({
   const { profile } = useAuth();
   const navigate = useNavigate();
   const projects = useLookupOptions("projects");
+  const settings = useWorkspaceSettings();
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [from, setFrom] = useState(startOfMonthInput());
   const [to, setTo] = useState(todayInput());
   const [entries, setEntries] = useState<UnbilledEntry[] | null>(null);
   const [project, setProject] = useState<ProjectRow | null>(null);
+  const [account, setAccount] = useState<AccountRow | null>(null);
   const [taskNames, setTaskNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -93,9 +101,10 @@ export default function InvoiceGenerator({
         .select("id, name")
         .eq("project_id", projectId)
         .limit(500),
-    ]).then(([entriesRes, projectRes, tasksRes]) => {
+    ]).then(async ([entriesRes, projectRes, tasksRes]) => {
+      const proj = projectRes.data as ProjectRow | null;
       setEntries((entriesRes.data ?? []) as UnbilledEntry[]);
-      setProject(projectRes.data as ProjectRow | null);
+      setProject(proj);
       setTaskNames(
         Object.fromEntries(
           ((tasksRes.data ?? []) as { id: string; name: string }[]).map((t) => [
@@ -104,6 +113,17 @@ export default function InvoiceGenerator({
           ]),
         ),
       );
+      // The client's VAT status decides the tax rate on the invoice.
+      if (proj?.account_id) {
+        const { data: acc } = await supabase
+          .from("accounts")
+          .select("id, vat_exempt")
+          .eq("id", proj.account_id)
+          .maybeSingle();
+        setAccount(acc as AccountRow | null);
+      } else {
+        setAccount(null);
+      }
       setLoading(false);
     });
   }, [projectId, from, to]);
@@ -139,8 +159,17 @@ export default function InvoiceGenerator({
       g.hours += Number(e.duration ?? 0);
       g.entryIds.push(e.id);
     }
-    return { totalHours, amount, groups: Array.from(groups.values()) };
-  }, [entries, project, taskNames]);
+    const taxRate = vatRateFor(settings, account);
+    const tax = +((amount * taxRate) / 100).toFixed(2);
+    return {
+      totalHours,
+      amount,
+      taxRate,
+      tax,
+      total: +(amount + tax).toFixed(2),
+      groups: Array.from(groups.values()),
+    };
+  }, [entries, project, taskNames, settings, account]);
 
   async function generate() {
     if (!project || !entries || entries.length === 0 || !preview) return;
@@ -148,8 +177,10 @@ export default function InvoiceGenerator({
     setError("");
     const now = Date.now();
     const invoiceNumber = await nextInvoiceNumber();
-    const subtotal = +preview.amount.toFixed(2);
 
+    // subtotal / tax_amount / total_amount are DB-computed: the line items
+    // below roll up into subtotal, and the tax and total are generated from
+    // it. Writing them here would be ignored at best and wrong at worst.
     const { data: invoice, error: invErr } = await supabase
       .from("invoices")
       .insert({
@@ -159,10 +190,7 @@ export default function InvoiceGenerator({
         status: "draft",
         issue_date: now,
         due_date: now + 30 * 86400000, // Net 30
-        subtotal,
-        tax_rate: 0,
-        tax_amount: 0,
-        total_amount: subtotal,
+        tax_rate: preview.taxRate,
         currency: project.currency || DEFAULT_CURRENCY,
         notes: `Generated from ${entries.length} time entr${entries.length === 1 ? "y" : "ies"} (${from} → ${to})`,
         created_by_id: profile?.id ?? "system",
@@ -243,23 +271,35 @@ export default function InvoiceGenerator({
           <EmptyState message="No unbilled billable time entries in this period." />
         ) : entries && preview ? (
           <>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-[var(--section-darker)] border border-[rgba(255,255,255,0.05)] rounded-[var(--radius-md)] p-4 text-center">
-                <p className="label-mono mb-1">Entries</p>
-                <p className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-                  {entries.length}
-                </p>
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-[var(--section-darker)] border border-[rgba(255,255,255,0.05)] rounded-[var(--radius-md)] p-4 text-center">
                 <p className="label-mono mb-1">Hours</p>
                 <p className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
                   {fmtHours(preview.totalHours)}
                 </p>
+                <p className="text-xs text-[var(--text-faint)] mt-1">
+                  {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                </p>
+              </div>
+              <div className="bg-[var(--section-darker)] border border-[rgba(255,255,255,0.05)] rounded-[var(--radius-md)] p-4 text-center">
+                <p className="label-mono mb-1">Subtotal</p>
+                <p className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                  {fmtCurrency(preview.amount, project?.currency ?? DEFAULT_CURRENCY)}
+                </p>
+              </div>
+              <div className="bg-[var(--section-darker)] border border-[rgba(255,255,255,0.05)] rounded-[var(--radius-md)] p-4 text-center">
+                <p className="label-mono mb-1">VAT {preview.taxRate}%</p>
+                <p className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                  {fmtCurrency(preview.tax, project?.currency ?? DEFAULT_CURRENCY)}
+                </p>
+                {account?.vat_exempt && (
+                  <p className="text-xs text-[var(--text-faint)] mt-1">client is exempt</p>
+                )}
               </div>
               <div className="bg-[var(--section-darker)] border border-[rgba(60,201,152,0.2)] rounded-[var(--radius-md)] p-4 text-center glow-mint">
                 <p className="label-mono mb-1">Invoice Total</p>
                 <p className="font-[var(--font-heading)] font-bold text-xl text-[var(--mint)]">
-                  {fmtCurrency(preview.amount, project?.currency ?? DEFAULT_CURRENCY)}
+                  {fmtCurrency(preview.total, project?.currency ?? DEFAULT_CURRENCY)}
                 </p>
               </div>
             </div>

@@ -16,22 +16,33 @@ interface Invoice {
   due_date: number;
   paid_date: number | null;
   total_amount: number | string;
+  amount_paid: number | string;
+  balance: number | string;
+}
+
+interface Payment {
+  invoice_id: string;
+  amount: number | string;
+  paid_at: number;
 }
 
 const BILLED = ["sent", "paid", "overdue"];
 
 export default function FinancialDashboard() {
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [hours, setHours] = useState<{ duration: number | string; is_billable: boolean }[]>([]);
   const [showGenerator, setShowGenerator] = useState(false);
   const maps = useLookupMaps(["accounts"]);
 
   useEffect(() => {
     Promise.all([
-      supabase.from("invoices").select("id, account_id, invoice_number, status, issue_date, due_date, paid_date, total_amount").limit(2000),
+      supabase.from("invoices").select("id, account_id, invoice_number, status, issue_date, due_date, paid_date, total_amount, amount_paid, balance").eq("is_deleted", false).limit(2000),
+      supabase.from("invoice_payments").select("invoice_id, amount, paid_at").eq("is_deleted", false).limit(5000),
       supabase.from("time_entries").select("duration, is_billable").eq("is_running", false).gte("date", startOfMonthMs()),
-    ]).then(([invRes, timeRes]) => {
+    ]).then(([invRes, payRes, timeRes]) => {
       setInvoices((invRes.data ?? []) as Invoice[]);
+      setPayments((payRes.data ?? []) as Payment[]);
       setHours((timeRes.data ?? []) as { duration: number | string; is_billable: boolean }[]);
     });
   }, []);
@@ -40,13 +51,16 @@ export default function FinancialDashboard() {
     if (!invoices) return null;
     const now = Date.now();
     const billed = invoices.filter((i) => BILLED.includes(i.status));
-    const paid = billed.filter((i) => i.status === "paid");
-    const unpaid = billed.filter((i) => i.status !== "paid");
-    const overdue = unpaid.filter((i) => Number(i.due_date) < now);
+    // Outstanding money is what's still owed, not the status of the invoice —
+    // a partly-paid invoice belongs in the aging buckets for its balance only.
+    const open = billed.filter((i) => Number(i.balance ?? 0) > 0);
+    const overdue = open.filter((i) => Number(i.due_date) < now);
     const amt = (list: Invoice[]) =>
       list.reduce((s, i) => s + Number(i.total_amount ?? 0), 0);
+    const due = (list: Invoice[]) =>
+      list.reduce((s, i) => s + Number(i.balance ?? 0), 0);
 
-    // Aging buckets for unpaid invoices
+    // Aging buckets, by outstanding balance
     const day = 86400000;
     const buckets = [
       { label: "Current", test: (i: Invoice) => Number(i.due_date) >= now },
@@ -54,11 +68,13 @@ export default function FinancialDashboard() {
       { label: "31–60 days", test: (i: Invoice) => now - Number(i.due_date) > 30 * day && now - Number(i.due_date) <= 60 * day },
       { label: "60+ days", test: (i: Invoice) => now - Number(i.due_date) > 60 * day },
     ].map((b) => {
-      const list = unpaid.filter(b.test);
-      return { label: b.label, total: amt(list), count: list.length };
+      const list = open.filter(b.test);
+      return { label: b.label, total: due(list), count: list.length };
     });
 
-    // Invoiced vs paid by month (last 6 months)
+    // Invoiced vs collected by month (last 6 months). Collection is counted
+    // from the payments themselves, so a part-payment shows up in the month
+    // the money actually arrived.
     const months: { label: string; invoiced: number; collected: number }[] = [];
     for (let m = 5; m >= 0; m--) {
       const d = new Date();
@@ -67,14 +83,19 @@ export default function FinancialDashboard() {
       months.push({
         label: new Date(start).toLocaleDateString(undefined, { month: "short" }),
         invoiced: amt(billed.filter((i) => Number(i.issue_date) >= start && Number(i.issue_date) < end)),
-        collected: amt(paid.filter((i) => Number(i.paid_date ?? 0) >= start && Number(i.paid_date ?? 0) < end)),
+        collected: payments
+          .filter((p) => Number(p.paid_at) >= start && Number(p.paid_at) < end)
+          .reduce((s, p) => s + Number(p.amount ?? 0), 0),
       });
     }
 
-    // Top accounts by collected revenue
+    // Top accounts by cash actually collected
+    const accountOf = new Map(invoices.map((i) => [i.id, i.account_id]));
     const byAccount = new Map<string, number>();
-    for (const i of paid) {
-      byAccount.set(i.account_id, (byAccount.get(i.account_id) ?? 0) + Number(i.total_amount ?? 0));
+    for (const p of payments) {
+      const accountId = accountOf.get(p.invoice_id);
+      if (!accountId) continue;
+      byAccount.set(accountId, (byAccount.get(accountId) ?? 0) + Number(p.amount ?? 0));
     }
     const topAccounts = Array.from(byAccount.entries())
       .sort((a, b) => b[1] - a[1])
@@ -85,9 +106,9 @@ export default function FinancialDashboard() {
 
     return {
       totalInvoiced: amt(billed),
-      collected: amt(paid),
-      outstanding: amt(unpaid),
-      overdueAmt: amt(overdue),
+      collected: billed.reduce((s, i) => s + Number(i.amount_paid ?? 0), 0),
+      outstanding: due(open),
+      overdueAmt: due(overdue),
       overdueCount: overdue.length,
       draftCount: invoices.filter((i) => i.status === "draft").length,
       buckets,
@@ -95,7 +116,7 @@ export default function FinancialDashboard() {
       topAccounts,
       utilization: totalHours > 0 ? (billableHours / totalHours) * 100 : 0,
     };
-  }, [invoices, hours]);
+  }, [invoices, payments, hours]);
 
   if (!view) return <Spinner />;
 
@@ -104,8 +125,8 @@ export default function FinancialDashboard() {
 
   const stats = [
     { label: "Total Invoiced", value: fmtCurrency(view.totalInvoiced), sub: "sent · paid · overdue" },
-    { label: "Collected", value: fmtCurrency(view.collected), sub: "paid invoices" },
-    { label: "Outstanding", value: fmtCurrency(view.outstanding), sub: "awaiting payment" },
+    { label: "Collected", value: fmtCurrency(view.collected), sub: "payments received" },
+    { label: "Outstanding", value: fmtCurrency(view.outstanding), sub: "balance still due" },
     {
       label: "Overdue",
       value: fmtCurrency(view.overdueAmt),
@@ -194,7 +215,7 @@ export default function FinancialDashboard() {
         {/* Aging */}
         <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-6">
           <h3 className="font-[var(--font-heading)] font-semibold text-[var(--foreground)] mb-5">
-            Invoice Aging (Unpaid)
+            Invoice Aging (Outstanding Balance)
           </h3>
           <div className="space-y-4">
             {view.buckets.map((b, i) => {

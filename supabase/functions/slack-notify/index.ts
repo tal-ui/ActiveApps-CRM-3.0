@@ -163,12 +163,15 @@ interface WebhookPayload {
   old_record?: Record<string, unknown> | null;
 }
 
-async function handleCron(cfg: SlackConfig): Promise<unknown[]> {
+// cfg is nullable on purpose: the hourly run also does billing work (overdue
+// flips, retainer generation) that must keep happening whether or not Slack is
+// connected. Only the posting is skipped when there's no config.
+async function handleCron(cfg: SlackConfig | null): Promise<unknown[]> {
   const results: unknown[] = [];
   const now = Date.now();
 
   // 1. Long-running timers (8-9h window so the hourly cron reminds once)
-  if (enabled(cfg, "timer_reminder")) {
+  if (cfg && enabled(cfg, "timer_reminder")) {
     const { data: running } = await supabase
       .from("time_entries")
       .select("id, project_id, start_time, description")
@@ -200,11 +203,69 @@ async function handleCron(cfg: SlackConfig): Promise<unknown[]> {
   }
 
   // 2. Flip sent → overdue (the invoices status trigger sends the notification)
+  //    Only invoices that still owe money: a partly-paid invoice past its due
+  //    date is overdue, a fully-settled one never is.
   await supabase
     .from("invoices")
     .update({ status: "overdue", updated_at: now })
     .eq("status", "sent")
+    .gt("balance", 0)
     .lt("due_date", now);
+
+  // 3. Retainers that have come due. generate_recurring_invoice() does the
+  //    work (and advances next_run_date), so a run that partially fails can
+  //    be retried on the next hour without duplicating what already landed.
+  const { data: due } = await supabase
+    .from("recurring_invoices")
+    .select("id, name, amount, currency, account_id")
+    .eq("status", "active")
+    .eq("is_deleted", false)
+    .lte("next_run_date", now)
+    .limit(100);
+
+  for (const schedule of due ?? []) {
+    const { data: invoiceId, error } = await supabase.rpc(
+      "generate_recurring_invoice",
+      { p_schedule_id: schedule.id as string },
+    );
+    if (error) {
+      results.push({ retainer: schedule.name, error: error.message });
+      continue;
+    }
+    results.push({ retainer: schedule.name, invoice: invoiceId });
+    if (!cfg || !enabled(cfg, "retainer_generated")) continue;
+
+    const { data: invoice } = await supabase
+      .from("invoices")
+      .select("invoice_number, total_amount, currency, due_date")
+      .eq("id", String(invoiceId))
+      .maybeSingle();
+    const appUrl = cfg.app_url || APP_URL_FALLBACK;
+    results.push(
+      await post(
+        cfg,
+        "finance",
+        `Retainer invoice ready: ${schedule.name}`,
+        blocksFor(
+          "🔁 Retainer invoice generated",
+          [
+            ["Retainer", String(schedule.name)],
+            ["Account", await accountName(schedule.account_id)],
+            ["Invoice", String(invoice?.invoice_number ?? "—")],
+            [
+              "Amount",
+              money(
+                invoice?.total_amount ?? schedule.amount,
+                String(invoice?.currency ?? schedule.currency ?? "ILS"),
+              ),
+            ],
+          ],
+          `${appUrl}/invoices/${invoiceId}`,
+          "Review draft",
+        ),
+      ),
+    );
+  }
 
   return results;
 }
@@ -376,6 +437,16 @@ Deno.serve(async (req: Request) => {
   try {
     const payload = (await req.json()) as WebhookPayload;
     const cfg = await getConfig();
+
+    // The hourly run carries billing work, so it goes ahead without Slack.
+    // Everything else here exists only to post a message.
+    if (payload.type === "CRON") {
+      return json({
+        ok: true,
+        slack: cfg ? "configured" : "not_configured",
+        result: await handleCron(cfg),
+      });
+    }
     if (!cfg) {
       return json({ ok: false, reason: "slack_not_configured" });
     }
@@ -397,8 +468,6 @@ Deno.serve(async (req: Request) => {
           "Open CRM",
         ),
       );
-    } else if (payload.type === "CRON") {
-      result = await handleCron(cfg);
     } else {
       result = await handleWebhook(cfg, payload);
     }

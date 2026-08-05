@@ -68,6 +68,7 @@ const NAV_GROUPS: { key: string; label: string; items: NavEntry[] }[] = [
       { to: "/financial", label: "Financial", icon: Banknote },
       { to: "/monthly", label: "Monthly Ops", icon: CalendarRange },
       objEntry("invoices"),
+      objEntry("recurring_invoices"),
       objEntry("monthly_summaries"),
       objEntry("services"),
       { to: "/currency", label: "Currency", icon: Calculator },

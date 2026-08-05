@@ -32,7 +32,9 @@ import OpportunityConvertModal from "../components/OpportunityConvertModal";
 import AccountInsights from "../components/AccountInsights";
 import ProjectBudget from "../components/ProjectBudget";
 import InvoiceActions from "../components/InvoiceActions";
+import InvoicePayments from "../components/InvoicePayments";
 import QuoteActions from "../components/QuoteActions";
+import RetainerActions from "../components/RetainerActions";
 import QuoteCreateModal from "../components/QuoteCreateModal";
 import AttachmentsPanel from "../components/AttachmentsPanel";
 import AiInsightPanel from "../components/AiInsightPanel";
@@ -68,6 +70,8 @@ export default function RecordPage() {
   const [linkedProjectId, setLinkedProjectId] = useState<string | null>(null);
   const [projectChecked, setProjectChecked] = useState(false);
   const [reload, setReload] = useState(0);
+  // Bumped by the header's Record Payment button to open the payments modal.
+  const [paymentSignal, setPaymentSignal] = useState(0);
 
   const { defs: customDefs } = useCustomFields(object);
   const [cfRows, setCfRows] = useState<Record<string, CustomFieldValueRow>>({});
@@ -323,11 +327,18 @@ export default function RecordPage() {
               <InvoiceActions
                 invoice={record}
                 onChanged={() => setReload((r) => r + 1)}
+                onRecordPayment={() => setPaymentSignal((s) => s + 1)}
               />
             )}
             {object === "quotes" && (
               <QuoteActions
                 quote={record}
+                onChanged={() => setReload((r) => r + 1)}
+              />
+            )}
+            {object === "recurring_invoices" && (
+              <RetainerActions
+                retainer={record}
                 onChanged={() => setReload((r) => r + 1)}
               />
             )}
@@ -381,6 +392,15 @@ export default function RecordPage() {
       {/* Object-specific insight widgets (Sprint 5) */}
       {object === "accounts" && <AccountInsights accountId={id} />}
       {object === "projects" && <ProjectBudget project={record} />}
+      {object === "invoices" && (
+        <div className="mb-6">
+          <InvoicePayments
+            invoice={record}
+            onChanged={() => setReload((r) => r + 1)}
+            openSignal={paymentSignal}
+          />
+        </div>
+      )}
 
       {/* Main + rail composition: record data and its children on the left,
           supporting panels (AI insight, activity, files) in the right rail */}
