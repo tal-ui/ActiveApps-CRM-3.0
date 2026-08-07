@@ -18,6 +18,7 @@ import MaintenancePage from "./pages/settings/MaintenancePage";
 import UsersRolesPage from "./pages/settings/UsersRolesPage";
 import AuditLogPage from "./pages/settings/AuditLogPage";
 import WorkspaceSettingsPage from "./pages/settings/WorkspaceSettingsPage";
+import InvoicingSettingsPage from "./pages/settings/InvoicingSettingsPage";
 import AutomationsPage from "./pages/settings/AutomationsPage";
 import { Spinner } from "./components/ui";
 
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="/settings/custom-fields" element={<CustomFieldsPage />} />
               <Route path="/settings/layouts" element={<LayoutBuilderPage />} />
               <Route path="/settings/slack" element={<SlackIntegrationPage />} />
+              <Route path="/settings/invoicing" element={<InvoicingSettingsPage />} />
               <Route path="/settings/maintenance" element={<MaintenancePage />} />
               <Route path="/settings/users" element={<UsersRolesPage />} />
               <Route path="/settings/audit" element={<AuditLogPage />} />

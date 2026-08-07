@@ -133,7 +133,7 @@ export default function InvoiceActions({
       }
       if (body?.error === "not_configured") {
         setError(
-          "Green Invoice isn't connected yet — add the API key in Settings → Workspace.",
+          "Green Invoice isn't connected yet — add the API credentials in Settings → Tax Invoicing.",
         );
         return;
       }

@@ -3,13 +3,14 @@ import { supabase } from "./supabase";
 import { DEFAULT_CURRENCY } from "./format";
 
 /**
- * The workspace_settings row is a single jsonb blob edited on
- * Settings → Workspace. This module gives the rest of the app a typed,
- * cached read of the keys it cares about, so consumers never have to know
- * the storage shape or repeat the fetch.
+ * The workspace_settings row is a single jsonb blob edited from more than one
+ * screen (Settings → Workspace for branding and defaults, Settings → Tax
+ * Invoicing for VAT and issuer identity). This module gives the rest of the
+ * app a typed, cached read of the keys it cares about, plus the one safe way
+ * to write them, so consumers never have to know the storage shape.
  *
- * Unknown keys are deliberately not modelled here — the settings page
- * preserves them on save via a read-modify-write merge.
+ * Unknown keys are deliberately not modelled here — saveWorkspaceSettings
+ * preserves whatever else is in the row.
  */
 export interface WorkspaceSettings {
   workspaceName: string;
@@ -95,6 +96,44 @@ export async function fetchWorkspaceSettings(): Promise<WorkspaceSettings> {
 
 export function invalidateWorkspaceSettings() {
   cache = null;
+}
+
+/**
+ * Merge `patch` into the stored settings and write the row back.
+ *
+ * The merge reads the row again immediately before writing rather than
+ * spreading a snapshot taken when the page mounted. That matters because
+ * workspace_settings is a *single* row edited from two different screens: a
+ * stale snapshot would quietly revert whatever the other screen saved. Each
+ * caller passes only the keys it owns.
+ *
+ * Returns an error message, or null on success.
+ */
+export async function saveWorkspaceSettings(
+  patch: Record<string, unknown>,
+): Promise<{ error: string | null; settings: Record<string, unknown> }> {
+  const { data, error: readError } = await supabase
+    .from("workspace_settings")
+    .select("id, settings")
+    .limit(1)
+    .maybeSingle();
+  if (readError) return { error: readError.message, settings: {} };
+
+  const row = data as { id: string; settings?: Record<string, unknown> } | null;
+  const merged = { ...(row?.settings ?? {}), ...patch };
+
+  const { error: writeError } = row
+    ? await supabase
+        .from("workspace_settings")
+        .update({ settings: merged, updated_at: Date.now() })
+        .eq("id", row.id)
+    : await supabase
+        .from("workspace_settings")
+        .insert({ id: "default", settings: merged, updated_at: Date.now() });
+
+  if (writeError) return { error: writeError.message, settings: merged };
+  invalidateWorkspaceSettings();
+  return { error: null, settings: merged };
 }
 
 export function useWorkspaceSettings(): WorkspaceSettings {
