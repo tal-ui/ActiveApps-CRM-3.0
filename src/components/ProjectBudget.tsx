@@ -108,12 +108,6 @@ export default function ProjectBudget({
             Budget & Billing
           </h3>
         </div>
-        {data.unbilledHours > 0 && (
-          <Button variant="ghost" onClick={() => setShowGenerator(true)} className="!px-3 !py-1.5">
-            <Wand2 size={14} strokeWidth={1.5} />
-            Generate Invoice ({fmtHours(data.unbilledHours)} unbilled)
-          </Button>
-        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -138,15 +132,10 @@ export default function ProjectBudget({
       {data.unbilledHours > 0 && (
         <p className="text-xs text-[var(--text-faint)] mt-4">
           {fmtHours(data.unbilledHours)} billable hours (
-          {fmtCurrency(data.unbilledValue, currency)}) not yet invoiced.
+          {fmtCurrency(data.unbilledValue, currency)}) not yet invoiced. Billing
+          happens on the account's monthly summary, which covers every project
+          worked that month.
         </p>
-      )}
-
-      {showGenerator && (
-        <InvoiceGenerator
-          projectId={projectId}
-          onClose={() => setShowGenerator(false)}
-        />
       )}
     </section>
   );

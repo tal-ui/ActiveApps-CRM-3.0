@@ -46,11 +46,38 @@ export default function RelatedList({
   const lookupMaps = useLookupMaps(lookupObjects);
 
   useEffect(() => {
-    let q = supabase.from(def.object).select("*").eq(def.foreignKey, parentId);
-    if (SOFT_DELETE_OBJECTS.has(def.object)) q = q.eq("is_deleted", false);
-    q.order("created_at", { ascending: false })
-      .limit(200)
-      .then(({ data }) => setRows((data ?? []) as Record<string, unknown>[]));
+    let cancelled = false;
+    const load = async () => {
+      // Many-to-many lists resolve their ids through the junction first; the
+      // child carries no foreign key back to this record.
+      let ids: string[] | null = null;
+      if (def.through) {
+        const { data: links } = await supabase
+          .from(def.through.table)
+          .select(def.through.childKey)
+          .eq(def.through.parentKey, parentId)
+          .limit(500);
+        ids = ((links ?? []) as unknown as Record<string, unknown>[]).map((l) =>
+          String(l[def.through!.childKey]),
+        );
+        // No links means no rows — skip the query rather than asking for
+        // `id in ()`, which PostgREST rejects.
+        if (ids.length === 0) {
+          if (!cancelled) setRows([]);
+          return;
+        }
+      }
+
+      let q = supabase.from(def.object).select("*");
+      q = ids ? q.in("id", ids) : q.eq(def.foreignKey, parentId);
+      if (SOFT_DELETE_OBJECTS.has(def.object)) q = q.eq("is_deleted", false);
+      const { data } = await q.order("created_at", { ascending: false }).limit(200);
+      if (!cancelled) setRows((data ?? []) as Record<string, unknown>[]);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [def, parentId, reload]);
 
   const Icon = childDef.icon;
@@ -66,10 +93,14 @@ export default function RelatedList({
           </h3>
           <span className="label-mono">({rows.length})</span>
         </div>
-        <Button variant="ghost" onClick={() => setShowForm(true)} className="!px-3 !py-1.5">
-          <Plus size={14} strokeWidth={2} />
-          Add
-        </Button>
+        {/* Junction-backed lists are derived from other data — there is no
+            meaningful record to create from here. */}
+        {!def.through && (
+          <Button variant="ghost" onClick={() => setShowForm(true)} className="!px-3 !py-1.5">
+            <Plus size={14} strokeWidth={2} />
+            Add
+          </Button>
+        )}
       </div>
 
       {rows.length === 0 ? (

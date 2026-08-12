@@ -34,6 +34,8 @@ export interface InvoicePdfData {
   projectName: string | null;
   currency: string;
   subtotal: number;
+  discountPercent?: number;
+  discountAmount?: number;
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
@@ -78,6 +80,8 @@ export interface DocumentPdfData {
   filename: string;
   currency: string;
   subtotal: number;
+  discountPercent?: number;
+  discountAmount?: number;
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
@@ -254,6 +258,14 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
     ty += 20;
   };
   totalRow("SUBTOTAL", money(data.subtotal, data.currency));
+  // The discount is shown, not folded into the line prices — the client sees
+  // the agreed rate and the reduction separately.
+  if ((data.discountPercent ?? 0) > 0) {
+    totalRow(
+      `DISCOUNT (${data.discountPercent}%)`,
+      `-${money(data.discountAmount ?? 0, data.currency)}`,
+    );
+  }
   if (data.taxRate > 0) {
     totalRow(`VAT (${data.taxRate}%)`, money(data.taxAmount, data.currency));
   }
@@ -318,13 +330,15 @@ export function generateInvoicePdf(data: InvoicePdfData): Promise<void> {
       data.accountTaxId ? `Tax ID: ${data.accountTaxId}` : null,
       data.accountAddress,
     ],
-    subLine: data.projectName ? `Project: ${data.projectName}` : null,
+    subLine: data.projectName ? `Projects: ${data.projectName}` : null,
     meta,
     qtyHeader: "Hours / Qty",
     totalLabel: "TOTAL DUE",
     filename: `${data.legalDocNumber || data.invoiceNumber}.pdf`,
     currency: data.currency,
     subtotal: data.subtotal,
+    discountPercent: data.discountPercent,
+    discountAmount: data.discountAmount,
     taxRate: data.taxRate,
     taxAmount: data.taxAmount,
     totalAmount: data.totalAmount,

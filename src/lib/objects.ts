@@ -71,6 +71,12 @@ export interface RelatedListDef {
   columns: string[];
   // Render in the record page's right rail instead of the main column
   inRail?: boolean;
+  // Many-to-many: resolve the child ids through a junction table instead of a
+  // foreign key on the child. `parentKey` is the junction column holding this
+  // record's id, `childKey` the one holding the child's. When set,
+  // `foreignKey` is unused. Junction rows are derived, so these lists are
+  // read-only — there is nothing meaningful to "add" from here.
+  through?: { table: string; parentKey: string; childKey: string };
 }
 
 export interface ObjectDef {
@@ -289,7 +295,9 @@ export const OBJECTS: Record<string, ObjectDef> = {
     relatedLists: [
       { object: "tasks", foreignKey: "project_id", columns: ["name", "status", "priority", "due_date"] },
       { object: "time_entries", foreignKey: "project_id", columns: ["date", "duration", "is_billable", "description"] },
-      { object: "invoices", foreignKey: "project_id", columns: ["invoice_number", "status", "total_amount", "due_date"] },
+      // An invoice covers a month across several projects, so this side is a
+      // junction lookup too rather than a foreign key on the invoice.
+      { object: "invoices", foreignKey: "id", columns: ["invoice_number", "status", "total_amount", "due_date"], through: { table: "invoice_projects", parentKey: "project_id", childKey: "invoice_id" } },
     ],
   },
 
@@ -359,7 +367,9 @@ export const OBJECTS: Record<string, ObjectDef> = {
     fields: [
       { name: "invoice_number", label: "Invoice #", type: "text", required: true, section: "Invoice Information", showInList: true },
       { name: "account_id", label: "Account", type: "lookup", lookup: "accounts", required: true, section: "Invoice Information", showInList: true },
-      { name: "project_id", label: "Project", type: "lookup", lookup: "projects", section: "Invoice Information" },
+      // An invoice bills a month of work across however many projects it
+      // touched — the projects are a related list, not a field.
+      { name: "monthly_summary_id", label: "Monthly Summary", type: "lookup", lookup: "monthly_summaries", readOnly: true, section: "Invoice Information" },
       { name: "status", label: "Status", type: "picklist", required: true, defaultValue: "draft", section: "Invoice Information", options: opts("draft", "sent", "paid", "overdue", "cancelled"), showInList: true },
       { name: "issue_date", label: "Issue Date", type: "date", required: true, section: "Dates", showInList: true },
       { name: "due_date", label: "Due Date", type: "date", required: true, section: "Dates", showInList: true },
@@ -367,6 +377,8 @@ export const OBJECTS: Record<string, ObjectDef> = {
       // Formula fields — the DB rolls subtotal up from the line items, and
       // tax/total are generated from it. Nothing here may be written by hand.
       { name: "subtotal", label: "Subtotal", type: "currency", readOnly: true, section: "Amounts" },
+      { name: "discount_percent", label: "Discount (%)", type: "number", defaultValue: 0, section: "Amounts" },
+      { name: "discount_amount", label: "Discount", type: "currency", readOnly: true, section: "Amounts" },
       { name: "tax_rate", label: "Tax Rate (%)", type: "number", defaultValue: 0, section: "Amounts" },
       { name: "tax_amount", label: "Tax Amount", type: "currency", readOnly: true, section: "Amounts" },
       { name: "total_amount", label: "Total", type: "currency", readOnly: true, section: "Amounts", showInList: true },
@@ -385,6 +397,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
     relatedLists: [
       { object: "invoice_line_items", foreignKey: "invoice_id", title: "Line Items", columns: ["description", "quantity", "unit_price", "total_price"] },
       { object: "invoice_payments", foreignKey: "invoice_id", title: "Payments", columns: ["paid_at", "amount", "method", "reference"] },
+      { object: "projects", foreignKey: "id", title: "Projects Covered", columns: ["name", "status", "hourly_rate"], through: { table: "invoice_projects", parentKey: "invoice_id", childKey: "project_id" } },
     ],
   },
 
@@ -551,6 +564,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
     ],
     relatedLists: [
       { object: "time_entries", foreignKey: "monthly_summary_id", title: "Time Entries", columns: ["task_id", "date", "duration", "hourly_rate"] },
+      { object: "invoices", foreignKey: "monthly_summary_id", title: "Invoice", columns: ["invoice_number", "status", "total_amount", "balance"] },
     ],
   },
 

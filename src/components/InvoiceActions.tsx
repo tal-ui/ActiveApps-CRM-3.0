@@ -39,19 +39,29 @@ export default function InvoiceActions({
   async function downloadPdf() {
     setBusy(true);
     const { generateInvoicePdf } = await import("../lib/invoicePdf");
-    const [{ data: lines }, settings, { data: account }] = await Promise.all([
-      supabase
-        .from("invoice_line_items")
-        .select("description, quantity, unit_price, total_price")
-        .eq("invoice_id", invoice.id as string)
-        .order("created_at", { ascending: true }),
-      fetchWorkspaceSettings(),
-      supabase
-        .from("accounts")
-        .select("name, legal_name, tax_id, address, city, country")
-        .eq("id", String(invoice.account_id ?? ""))
-        .maybeSingle(),
-    ]);
+    const [{ data: lines }, settings, { data: account }, { data: links }] =
+      await Promise.all([
+        supabase
+          .from("invoice_line_items")
+          .select("description, quantity, unit_price, total_price")
+          .eq("invoice_id", invoice.id as string)
+          .order("created_at", { ascending: true }),
+        fetchWorkspaceSettings(),
+        supabase
+          .from("accounts")
+          .select("name, legal_name, tax_id, address, city, country")
+          .eq("id", String(invoice.account_id ?? ""))
+          .maybeSingle(),
+        // An invoice spans projects now, so the subtitle lists them rather
+        // than naming a single one.
+        supabase
+          .from("invoice_projects")
+          .select("project_id")
+          .eq("invoice_id", invoice.id as string),
+      ]);
+    const projectNames = ((links ?? []) as { project_id: string }[])
+      .map((l) => maps.projects?.[l.project_id])
+      .filter(Boolean) as string[];
     const acc = account as {
       name?: string;
       legal_name?: string | null;
@@ -74,11 +84,16 @@ export default function InvoiceActions({
       accountAddress:
         [acc?.address, acc?.city, acc?.country].filter(Boolean).join(", ") ||
         null,
-      projectName: invoice.project_id
-        ? (maps.projects?.[String(invoice.project_id)] ?? null)
-        : null,
+      projectName:
+        projectNames.length === 0
+          ? null
+          : projectNames.length <= 3
+            ? projectNames.join(", ")
+            : `${projectNames.slice(0, 3).join(", ")} +${projectNames.length - 3} more`,
       currency: String(invoice.currency ?? DEFAULT_CURRENCY),
       subtotal: Number(invoice.subtotal ?? 0),
+      discountPercent: Number(invoice.discount_percent ?? 0),
+      discountAmount: Number(invoice.discount_amount ?? 0),
       taxRate: Number(invoice.tax_rate ?? 0),
       taxAmount: Number(invoice.tax_amount ?? 0),
       totalAmount: Number(invoice.total_amount ?? 0),

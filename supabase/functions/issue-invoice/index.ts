@@ -247,7 +247,7 @@ async function buildDocumentPayload(
   const { data: invoice } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, account_id, status, currency, subtotal, tax_rate, total_amount, amount_paid, balance, paid_date, notes, external_doc_number",
+      "id, invoice_number, account_id, status, currency, subtotal, tax_rate, discount_percent, discount_amount, total_amount, amount_paid, balance, paid_date, notes, external_doc_number",
     )
     .eq("id", invoiceId)
     .maybeSingle();
@@ -347,6 +347,12 @@ async function buildDocumentPayload(
         currency,
         vatType: taxRate > 0 ? VAT_TAXABLE : VAT_EXEMPT,
       })),
+      // The document total has to equal the receipt or Green Invoice rejects
+      // it with 2422, so a discounted invoice must declare its discount as a
+      // sum rather than leaving it implied by the CRM's own total.
+      ...(num(invoice.discount_amount) > 0
+        ? { discount: { amount: num(invoice.discount_amount), type: "sum" } }
+        : {}),
       // A combined tax-invoice-receipt has to state how the money arrived.
       // The amount key is `price`, matching the income lines — sending
       // `amount` made Green Invoice read the receipt as zero and reject it

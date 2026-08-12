@@ -35,6 +35,7 @@ import InvoiceActions from "../components/InvoiceActions";
 import InvoicePayments from "../components/InvoicePayments";
 import QuoteActions from "../components/QuoteActions";
 import RetainerActions from "../components/RetainerActions";
+import MonthlySummaryActions from "../components/MonthlySummaryActions";
 import QuoteCreateModal from "../components/QuoteCreateModal";
 import AttachmentsPanel from "../components/AttachmentsPanel";
 import AiInsightPanel from "../components/AiInsightPanel";
@@ -339,6 +340,12 @@ export default function RecordPage() {
             {object === "recurring_invoices" && (
               <RetainerActions
                 retainer={record}
+                onChanged={() => setReload((r) => r + 1)}
+              />
+            )}
+            {object === "monthly_summaries" && (
+              <MonthlySummaryActions
+                summary={record}
                 onChanged={() => setReload((r) => r + 1)}
               />
             )}
