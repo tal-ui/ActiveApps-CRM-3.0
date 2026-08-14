@@ -72,6 +72,13 @@ export interface RelatedListDef {
   columns: string[];
   // Render in the record page's right rail instead of the main column
   inRail?: boolean;
+  // How much of the page the list occupies when its parent uses the
+  // full-width flow layout (see ObjectDef.sectionWidths). Default "full".
+  width?: "half" | "full";
+  // Which columns may be edited in place. Omitted means none — inline editing
+  // on a related list is opt-in, because a child row's parent is showing
+  // rolled-up totals right above it. `readOnly` fields are skipped regardless.
+  editableFields?: string[];
   // Many-to-many: resolve the child ids through a junction table instead of a
   // foreign key on the child. `parentKey` is the junction column holding this
   // record's id, `childKey` the one holding the child's. When set,
@@ -93,6 +100,11 @@ export interface ObjectDef {
   activityType?: string; // related_to_type value if activities supported
   inNav?: boolean;
   ownerFields?: string[]; // auto-filled with current profile id on create
+  // Default page width per section title. Declaring this switches the record
+  // page from the main + right-rail split to a single full-width flow, so a
+  // "half" section is half the *page* rather than half of three fifths.
+  // Objects that leave it undefined are untouched.
+  sectionWidths?: Record<string, "half" | "full">;
 }
 
 // Shared by leads, accounts and opportunities so source attribution survives
@@ -566,10 +578,20 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "sub_total", label: "Sub Total", type: "currency", readOnly: true, section: "Totals", showInList: true },
       { name: "total_amount", label: "Total Amount", type: "currency", readOnly: true, section: "Totals", showInList: true },
     ],
+    // Reads top to bottom the way the month does: identify it, see its totals,
+    // review the hours, then look at what was billed and sent.
+    sectionWidths: {
+      Summary: "half",
+      Period: "half",
+      Billing: "half",
+      Totals: "half",
+    },
     relatedLists: [
-      { object: "time_entries", foreignKey: "monthly_summary_id", title: "Time Entries", columns: ["task_id", "date", "duration", "hourly_rate"] },
-      { object: "invoices", foreignKey: "monthly_summary_id", title: "Invoice", columns: ["invoice_number", "status", "total_amount", "balance"] },
-      { object: "email_log", foreignKey: "entity_id", title: "Emails Sent", columns: ["sent_at", "status", "subject"] },
+      // Hours, description and billable are correctable in place; date,
+      // project, task and rate are not — see RelatedList.
+      { object: "time_entries", foreignKey: "monthly_summary_id", title: "Time Entries", columns: ["date", "project_id", "task_id", "duration", "is_billable", "description"], editableFields: ["duration", "is_billable", "description"] },
+      { object: "invoices", foreignKey: "monthly_summary_id", title: "Invoice", columns: ["invoice_number", "status", "total_amount", "balance"], width: "half" },
+      { object: "email_log", foreignKey: "entity_id", title: "Emails Sent", columns: ["sent_at", "status", "subject"], width: "half" },
     ],
   },
 

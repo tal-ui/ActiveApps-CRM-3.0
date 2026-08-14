@@ -13,12 +13,19 @@ export interface LayoutFieldEntry {
   span: 1 | 2;
 }
 
+/**
+ * How much of the page a block occupies — distinct from `LayoutSection.columns`,
+ * which is the field grid *inside* a section. Absent means "full".
+ */
+export type BlockWidth = "half" | "full";
+
 export interface LayoutSection {
   id: string;
   title: string;
   columns: 1 | 2;
   collapsed?: boolean;
   sortOrder: number;
+  width?: BlockWidth;
   fields: LayoutFieldEntry[];
 }
 
@@ -28,6 +35,7 @@ export interface LayoutRelatedList {
   columns: string[];
   sortOrder: number;
   hidden?: boolean;
+  width?: BlockWidth;
 }
 
 export interface LayoutJson {
@@ -36,6 +44,30 @@ export interface LayoutJson {
 }
 
 export const CF_PREFIX = "cf:";
+
+/**
+ * Group an ordered list of blocks into rows: two consecutive half-width blocks
+ * share a row, everything else stands alone. A lone half keeps its own row and
+ * stays half — pairing it with the next full block would make that block half
+ * too, which is not what either declared.
+ *
+ * Pure on purpose: this is the whole of the arrangement logic, and it is
+ * unit-tested without rendering anything.
+ */
+export function packBlocks<T extends { width?: BlockWidth }>(
+  blocks: T[],
+): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].width === "half" && blocks[i + 1]?.width === "half") {
+      rows.push([blocks[i], blocks[i + 1]]);
+      i++;
+    } else {
+      rows.push([blocks[i]]);
+    }
+  }
+  return rows;
+}
 
 export function isCustomFieldName(fieldName: string): boolean {
   return fieldName.startsWith(CF_PREFIX);
@@ -74,7 +106,14 @@ export function defaultLayoutFor(
   }
   let i = 0;
   for (const [title, fields] of bySection.entries()) {
-    sections.push({ id: uid(), title, columns: 2, sortOrder: i++, fields });
+    sections.push({
+      id: uid(),
+      title,
+      columns: 2,
+      sortOrder: i++,
+      width: def.sectionWidths?.[title] ?? "full",
+      fields,
+    });
   }
   if (customDefs.length > 0) {
     sections.push({
@@ -100,6 +139,7 @@ export function defaultLayoutFor(
       columns: rl.columns,
       sortOrder: idx,
       hidden: false,
+      width: rl.width ?? "full",
     }),
   );
   return { sections, relatedLists };

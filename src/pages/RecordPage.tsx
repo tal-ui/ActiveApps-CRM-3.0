@@ -19,6 +19,8 @@ import {
   customFieldId,
   fetchDefaultLayout,
   isCustomFieldName,
+  packBlocks,
+  type BlockWidth,
   type LayoutJson,
 } from "../lib/layouts";
 import { Button, EmptyState, ErrorNote, Modal, Spinner } from "../components/ui";
@@ -41,7 +43,15 @@ import AttachmentsPanel from "../components/AttachmentsPanel";
 import AiInsightPanel from "../components/AiInsightPanel";
 
 // Objects that support file attachments / AI insight
-const ATTACHABLE = ["accounts", "opportunities", "projects", "invoices", "quotes", "tasks"];
+const ATTACHABLE = [
+  "accounts",
+  "opportunities",
+  "projects",
+  "invoices",
+  "quotes",
+  "tasks",
+  "monthly_summaries",
+];
 const AI_OBJECTS = ["accounts", "opportunities", "projects"] as const;
 
 interface RenderItem {
@@ -52,7 +62,14 @@ interface RenderItem {
 }
 interface RenderSection {
   title: string;
+  width: BlockWidth;
   items: RenderItem[];
+}
+/** One card on the page, once sections and related lists are a single flow. */
+interface Block {
+  key: string;
+  width: BlockWidth;
+  node: ReactNode;
 }
 
 export default function RecordPage() {
@@ -179,10 +196,17 @@ export default function RecordPage() {
       };
     };
 
+    // A stored layout that predates section widths (or was re-saved from the
+    // Page Layouts builder, which does not know about them) falls back to the
+    // registry by title — so the builder cannot silently flatten the page.
+    const widthOf = (title: string, stored?: BlockWidth): BlockWidth =>
+      stored ?? def?.sectionWidths?.[title] ?? "full";
+
     if (layout) {
       return layout.sections
         .map((s) => ({
           title: s.title,
+          width: widthOf(s.title, s.width),
           items: s.fields
             .filter((f) => f.isVisible)
             .map((f) =>
@@ -203,27 +227,36 @@ export default function RecordPage() {
       if (item) map.get(f.section)!.push(item);
     }
     const out: RenderSection[] = Array.from(map.entries()).map(
-      ([title, items]) => ({ title, items }),
+      ([title, items]) => ({ title, width: widthOf(title), items }),
     );
     if (customDefs.length > 0) {
       out.push({
         title: "Custom Fields",
+        width: widthOf("Custom Fields"),
         items: customDefs
           .map((cf) => customItem(cf.id))
           .filter((i): i is RenderItem => i !== null),
       });
     }
     return out;
-  }, [record, layout, visibleFields, customDefs, cfRows, lookupMaps]);
+  }, [record, layout, visibleFields, customDefs, cfRows, lookupMaps, def]);
 
   /* Related lists: layout order/visibility if configured */
-  const relatedLists: RelatedListDef[] = useMemo(() => {
+  const relatedLists: (RelatedListDef & { width: BlockWidth })[] = useMemo(() => {
     const base = def?.relatedLists ?? [];
-    if (!layout || layout.relatedLists.length === 0) return base;
+    const withWidth = (rl: RelatedListDef, stored?: BlockWidth) => ({
+      ...rl,
+      width: stored ?? rl.width ?? ("full" as BlockWidth),
+    });
+    if (!layout || layout.relatedLists.length === 0)
+      return base.map((rl) => withWidth(rl));
     return layout.relatedLists
       .filter((rl) => !rl.hidden)
-      .map((rl) => base.find((b) => b.object === rl.objectName))
-      .filter((b): b is RelatedListDef => !!b);
+      .map((rl) => {
+        const b = base.find((x) => x.object === rl.objectName);
+        return b ? withWidth(b, rl.width) : null;
+      })
+      .filter((b): b is RelatedListDef & { width: BlockWidth } => !!b);
   }, [def, layout]);
 
   if (!def) return <EmptyState message={`Unknown object: ${object}`} />;
@@ -288,6 +321,92 @@ export default function RecordPage() {
     invalidateLookup(object);
     navigate(`/${object}`);
   }
+
+  /* One card per section / related list, built once and arranged twice: the
+     classic main + rail split, or a single full-width flow for objects that
+     declare section widths. */
+  const sectionCard = (section: RenderSection) => (
+    <section
+      key={section.title}
+      className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5"
+    >
+      <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)] mb-4">
+        {section.title}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        {section.items.map((item) => (
+          <div key={item.key} className={item.span === 2 ? "sm:col-span-2" : ""}>
+            <p className="label-mono mb-1">{item.label}</p>
+            <div className="text-sm text-[var(--text-light)]">{item.node}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+
+  const relatedCard = (rl: RelatedListDef) => (
+    <RelatedList
+      key={rl.object + rl.foreignKey}
+      def={rl}
+      parentId={id}
+      onChanged={() => setReload((r) => r + 1)}
+    />
+  );
+
+  const railNodes: ReactNode[] = [];
+  if ((AI_OBJECTS as readonly string[]).includes(object))
+    railNodes.push(
+      <AiInsightPanel
+        key="ai"
+        objectType={object as (typeof AI_OBJECTS)[number]}
+        recordId={id}
+      />,
+    );
+  if (def.activityType)
+    railNodes.push(
+      <ActivityTimeline
+        key="activity"
+        relatedToType={def.activityType}
+        relatedToId={id}
+      />,
+    );
+  if (ATTACHABLE.includes(object))
+    railNodes.push(
+      // refreshKey: an attachment written from elsewhere on the page (Export
+      // PDF) is invisible until the panel reloads, and it owns its own rows.
+      <AttachmentsPanel
+        key="files"
+        entityType={object}
+        entityId={id}
+        refreshKey={reload}
+      />,
+    );
+  for (const rl of relatedLists.filter((r) => r.inRail))
+    railNodes.push(relatedCard(rl));
+
+  const flowLayout = !!def.sectionWidths;
+  const blocks: Block[] = [
+    ...sections.map((s) => ({
+      key: `section:${s.title}`,
+      width: s.width,
+      node: sectionCard(s),
+    })),
+    ...relatedLists
+      .filter((rl) => !rl.inRail)
+      .map((rl) => ({
+        key: `related:${rl.object}:${rl.foreignKey}`,
+        width: rl.width,
+        node: relatedCard(rl),
+      })),
+    // With no rail, its panels join the flow at full width rather than vanish.
+    ...(flowLayout
+      ? railNodes.map((node, i) => ({
+          key: `rail:${i}`,
+          width: "full" as BlockWidth,
+          node,
+        }))
+      : []),
+  ];
 
   return (
     <div>
@@ -409,73 +528,34 @@ export default function RecordPage() {
         </div>
       )}
 
-      {/* Main + rail composition: record data and its children on the left,
-          supporting panels (AI insight, activity, files) in the right rail */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 xl:items-start">
-        <div className="xl:col-span-3 space-y-6">
-          {/* Field sections (layout-driven) */}
-          {sections.map((section) => (
-            <section
-              key={section.title}
-              className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5"
+      {flowLayout ? (
+        /* Full-width flow: half-width blocks pair up across the whole page.
+           Only objects declaring sectionWidths get here — everything else
+           keeps the main + rail split below, unchanged. */
+        <div className="space-y-6">
+          {packBlocks(blocks).map((row) => (
+            <div
+              key={row[0].key}
+              className={
+                row[0].width === "half"
+                  ? "grid grid-cols-1 md:grid-cols-2 gap-6 items-start"
+                  : undefined
+              }
             >
-              <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)] mb-4">
-                {section.title}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                {section.items.map((item) => (
-                  <div
-                    key={item.key}
-                    className={item.span === 2 ? "sm:col-span-2" : ""}
-                  >
-                    <p className="label-mono mb-1">{item.label}</p>
-                    <div className="text-sm text-[var(--text-light)]">{item.node}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
+              {row.map((b) => b.node)}
+            </div>
           ))}
-
-          {/* Related lists (main column) */}
-          {relatedLists
-            .filter((rl) => !rl.inRail)
-            .map((rl) => (
-              <RelatedList
-                key={rl.object + rl.foreignKey}
-                def={rl}
-                parentId={id}
-                onChanged={() => setReload((r) => r + 1)}
-              />
-            ))}
         </div>
-
-        {/* Right rail */}
-        <div className="xl:col-span-2 space-y-6">
-          {(AI_OBJECTS as readonly string[]).includes(object) && (
-            <AiInsightPanel
-              objectType={object as (typeof AI_OBJECTS)[number]}
-              recordId={id}
-            />
-          )}
-          {def.activityType && (
-            <ActivityTimeline relatedToType={def.activityType} relatedToId={id} />
-          )}
-          {ATTACHABLE.includes(object) && (
-            <AttachmentsPanel entityType={object} entityId={id} />
-          )}
-          {/* Rail related lists (e.g. a task's time entries, under its files) */}
-          {relatedLists
-            .filter((rl) => rl.inRail)
-            .map((rl) => (
-              <RelatedList
-                key={rl.object + rl.foreignKey}
-                def={rl}
-                parentId={id}
-                onChanged={() => setReload((r) => r + 1)}
-              />
-            ))}
+      ) : (
+        /* Main + rail composition: record data and its children on the left,
+           supporting panels (AI insight, activity, files) in the right rail */
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 xl:items-start">
+          <div className="xl:col-span-3 space-y-6">
+            {blocks.map((b) => b.node)}
+          </div>
+          <div className="xl:col-span-2 space-y-6">{railNodes}</div>
         </div>
-      </div>
+      )}
 
       {/* Modals */}
       {showEdit && (

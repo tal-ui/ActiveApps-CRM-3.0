@@ -1,12 +1,81 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Receipt } from "lucide-react";
+import { FileDown, Mail, Receipt } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { invalidateLookup } from "../lib/lookups";
-import { useAuth } from "../lib/auth";
+import { useAuth, type Profile } from "../lib/auth";
 import { insertAudit } from "../lib/audit";
+import { loadSummaryEmailContext } from "../lib/summaryEmail";
 import { Button, ConfirmModal, ErrorNote } from "./ui";
 import SummaryEmailModal from "./SummaryEmailModal";
+
+/**
+ * File an exported breakdown against the summary that produced it.
+ *
+ * The storage path and file name are derived from the month, so re-exporting
+ * replaces the previous export rather than piling up near-identical PDFs — and
+ * a file the user uploaded by hand, under any other name, is never matched.
+ *
+ * Returns an error message, or null. The caller has already saved the PDF
+ * locally: filing is a side effect, and a Storage failure must not cost anyone
+ * their download.
+ */
+async function fileExport(
+  summaryId: string,
+  filename: string,
+  blob: Blob,
+  profile: Profile | null,
+): Promise<string | null> {
+  const path = `monthly_summaries/${summaryId}/${filename}`;
+  const { error: upErr } = await supabase.storage
+    .from("attachments")
+    .upload(path, blob, { contentType: "application/pdf", upsert: true });
+  if (upErr) return upErr.message;
+
+  const { data: prior } = await supabase
+    .from("attachments")
+    .select("id")
+    .eq("entity_type", "monthly_summaries")
+    .eq("entity_id", summaryId)
+    .eq("file_name", filename);
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("attachments")
+    .insert({
+      entity_type: "monthly_summaries",
+      entity_id: summaryId,
+      file_name: filename,
+      storage_path: path,
+      mime_type: "application/pdf",
+      size_bytes: blob.size,
+      uploaded_by_id: profile?.id ?? "system",
+      uploaded_by_email: profile?.email ?? null,
+      created_at: Date.now(),
+    })
+    .select("id")
+    .single();
+  if (insErr) {
+    // Only ours to clean up when no earlier export already occupied this path.
+    if (!prior?.length) {
+      await supabase.storage.from("attachments").remove([path]);
+    }
+    return insErr.message;
+  }
+
+  // Old rows go last, and by row only: they share the path with the file just
+  // written, so removing the object would delete the new export too.
+  const priorIds = (prior ?? []).map((r) => (r as { id: string }).id);
+  if (priorIds.length > 0) {
+    await supabase.from("attachments").delete().in("id", priorIds);
+  }
+  void insertAudit(profile, {
+    action: "upload",
+    entity_type: "attachment",
+    entity_id: (inserted as { id: string } | null)?.id ?? null,
+    summary: `Exported ${filename} to monthly_summaries/${summaryId}`,
+  });
+  return null;
+}
 
 /**
  * The two things you do with a monthly summary once the hours are in: bill it,
@@ -27,6 +96,7 @@ export default function MonthlySummaryActions({
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [emailing, setEmailing] = useState(false);
@@ -78,6 +148,52 @@ export default function MonthlySummaryActions({
     if (data) navigate(`/invoices/${String(data)}`);
   }
 
+  /**
+   * The same breakdown the client is emailed, and the same one Time Tracking
+   * exports — one renderer, so the three can't drift.
+   */
+  async function exportPdf() {
+    setExporting(true);
+    setError("");
+    try {
+      const { context, error: ctxErr } = await loadSummaryEmailContext(summaryId);
+      if (ctxErr || !context) {
+        setError(ctxErr ?? "Could not load this summary.");
+        return;
+      }
+      // Loaded on demand: a static import drags jsPDF into the main bundle.
+      const { buildMonthlyReport, monthlyReportFilename } = await import(
+        "../lib/pdf"
+      );
+      // Built once and used twice — rendering a second time for the attachment
+      // would lay the whole document out again and refetch the logo.
+      const doc = await buildMonthlyReport({
+        monthLabel: context.monthLabel,
+        projectFilter: context.reportSubtitle,
+        entries: context.entries,
+      });
+      const filename = monthlyReportFilename(context.monthLabel);
+      doc.save(filename);
+      const filingError = await fileExport(
+        summaryId,
+        filename,
+        doc.output("blob"),
+        profile,
+      );
+      if (filingError) {
+        setError(
+          `The PDF downloaded, but filing it against this summary failed: ${filingError}`,
+        );
+        return;
+      }
+      onChanged();
+    } catch (e) {
+      setError(`Could not build the breakdown: ${(e as Error)?.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const issued = !!invoice?.external_doc_number;
 
   return (
@@ -87,6 +203,11 @@ export default function MonthlySummaryActions({
           <ErrorNote message={error} />
         </div>
       )}
+
+      <Button variant="ghost" disabled={exporting} onClick={exportPdf}>
+        <FileDown size={14} strokeWidth={1.5} />
+        {exporting ? "Exporting…" : "Export PDF"}
+      </Button>
 
       {!alreadyInvoiced && (
         <Button disabled={busy} onClick={() => setConfirming(true)}>

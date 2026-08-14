@@ -27,9 +27,14 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export default function AttachmentsPanel({
   entityType,
   entityId,
+  refreshKey = 0,
 }: {
   entityType: string;
   entityId: string;
+  // Bumped by the page when something outside this panel writes an attachment
+  // (Export PDF on a monthly summary). The panel owns its rows, so without
+  // this the new file only appears on a remount.
+  refreshKey?: number;
 }) {
   const { profile } = useAuth();
   const [rows, setRows] = useState<AttachmentRow[]>([]);
@@ -54,7 +59,7 @@ export default function AttachmentsPanel({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
