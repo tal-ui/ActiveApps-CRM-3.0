@@ -47,6 +47,7 @@ export const AUDIT_ACTIONS = [
   "delete",
   "convert",
   "status_change",
+  "email_sent",
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [

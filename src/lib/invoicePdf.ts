@@ -123,7 +123,10 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   const logo = await loadLogoDataUrl();
   if (logo) {
     try {
-      doc.addImage(logo, "PNG", margin, 34, 30, 30);
+      // "FAST" matters more than it looks: without a compression flag jsPDF
+      // stores the decoded logo raw and the file balloons from 89 KB to
+      // 5.6 MB — fine for a local download, rude as an email attachment.
+      doc.addImage(logo, "PNG", margin, 34, 30, 30, undefined, "FAST");
     } catch {
       /* optional */
     }

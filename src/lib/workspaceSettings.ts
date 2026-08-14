@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { DEFAULT_CURRENCY } from "./format";
+import { DEFAULT_EMAIL_BODY, DEFAULT_EMAIL_SUBJECT } from "./emailTemplateText";
 
 /**
  * The workspace_settings row is a single jsonb blob edited from more than one
@@ -27,6 +28,17 @@ export interface WorkspaceSettings {
   issuerPhone: string;
   issuerEmail: string;
   issuerBusinessType: "osek_murshe" | "company" | "osek_patur";
+  /* Client email — who the monthly invoice email comes from and what it says.
+     Deliberately separate from the issuer block: the issuer is the legal
+     entity ("Tech Rider and Success Ltd", office@…), the sender is the person
+     the client actually corresponds with. */
+  emailSenderName: string;
+  emailSenderPhone: string;
+  emailSenderEmail: string;
+  emailSubjectTemplate: string;
+  /** Includes the sign-off. One field, not body + signature: two would need a
+   *  join rule nobody remembers, for six lines of text. */
+  emailBodyTemplate: string;
 }
 
 export const DEFAULT_VAT_RATE = 18;
@@ -44,6 +56,11 @@ export const EMPTY_SETTINGS: WorkspaceSettings = {
   issuerPhone: "",
   issuerEmail: "",
   issuerBusinessType: "osek_murshe",
+  emailSenderName: "",
+  emailSenderPhone: "",
+  emailSenderEmail: "",
+  emailSubjectTemplate: DEFAULT_EMAIL_SUBJECT,
+  emailBodyTemplate: DEFAULT_EMAIL_BODY,
 };
 
 function coerce(raw: Record<string, unknown>): WorkspaceSettings {
@@ -69,6 +86,13 @@ function coerce(raw: Record<string, unknown>): WorkspaceSettings {
       businessType === "company" || businessType === "osek_patur"
         ? businessType
         : "osek_murshe",
+    emailSenderName: str(raw.emailSenderName),
+    emailSenderPhone: str(raw.emailSenderPhone),
+    emailSenderEmail: str(raw.emailSenderEmail),
+    // Falling back to the defaults means the feature works before anyone opens
+    // the settings page.
+    emailSubjectTemplate: str(raw.emailSubjectTemplate, DEFAULT_EMAIL_SUBJECT),
+    emailBodyTemplate: str(raw.emailBodyTemplate, DEFAULT_EMAIL_BODY),
   };
 }
 

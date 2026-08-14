@@ -35,11 +35,26 @@ function fmtD(ms: number): string {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-export async function generateMonthlyReport(opts: {
+export interface MonthlyReportOpts {
   monthLabel: string;
+  /** Rendered in the subtitle — callers pass the account name. */
   projectFilter: string;
   entries: ReportEntry[];
-}): Promise<void> {
+}
+
+/** `ActiveApps-Hours-July-2026.pdf` — shared by the download and the email. */
+export function monthlyReportFilename(monthLabel: string): string {
+  return `ActiveApps-Hours-${monthLabel.replace(/\s+/g, "-")}.pdf`;
+}
+
+/**
+ * Renders the report and hands back the document instead of saving it, so the
+ * same bytes can be downloaded or attached to an email. Browser-only: the
+ * wordmark logo is fetched and read through FileReader.
+ */
+export async function buildMonthlyReport(
+  opts: MonthlyReportOpts,
+): Promise<jsPDF> {
   const { monthLabel, projectFilter, entries } = opts;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -49,7 +64,10 @@ export async function generateMonthlyReport(opts: {
   const logo = await loadLogoDataUrl();
   if (logo) {
     try {
-      doc.addImage(logo, "PNG", margin, 34, 30, 30);
+      // "FAST" matters more than it looks: without a compression flag jsPDF
+      // stores the decoded logo raw and the file balloons from 89 KB to
+      // 5.6 MB — fine for a local download, rude as an email attachment.
+      doc.addImage(logo, "PNG", margin, 34, 30, 30, undefined, "FAST");
     } catch {
       /* logo optional */
     }
@@ -215,5 +233,44 @@ export async function generateMonthlyReport(opts: {
     );
   }
 
-  doc.save(`ActiveApps-Hours-${monthLabel.replace(/\s+/g, "-")}.pdf`);
+  return doc;
+}
+
+/** Unchanged behaviour for the Export PDF button: build, then download. */
+export async function generateMonthlyReport(
+  opts: MonthlyReportOpts,
+): Promise<void> {
+  const doc = await buildMonthlyReport(opts);
+  doc.save(monthlyReportFilename(opts.monthLabel));
+}
+
+/** The same document as bytes, for attaching to an email. */
+export async function renderMonthlyReportBytes(
+  opts: MonthlyReportOpts,
+): Promise<Uint8Array> {
+  const doc = await buildMonthlyReport(opts);
+  // arraybuffer rather than datauristring: jsPDF injects a nonstandard
+  // ";filename=generated.pdf" segment into that URI, so splitting on "," to
+  // recover the base64 is fragile.
+  return new Uint8Array(doc.output("arraybuffer"));
+}
+
+/** Base64 with no data: prefix — what JSON transport to an edge function wants. */
+export async function renderMonthlyReportBase64(
+  opts: MonthlyReportOpts,
+): Promise<string> {
+  return bytesToBase64(await renderMonthlyReportBytes(opts));
+}
+
+/**
+ * Chunked on purpose: String.fromCharCode(...bytes) blows the call stack once
+ * the PDF passes ~100 KB, which a busy month easily does.
+ */
+export function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
 }

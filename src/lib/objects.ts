@@ -14,6 +14,7 @@ import {
   Receipt,
   Banknote,
   Repeat,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 
@@ -169,6 +170,9 @@ export const OBJECTS: Record<string, ObjectDef> = {
       { name: "slack_channel", label: "Slack Channel", type: "text", section: "Profile" },
       // Billing identity — what an Israeli tax invoice has to name the client by.
       { name: "legal_name", label: "Legal Name", type: "text", section: "Billing" },
+      // How the client is addressed in email ("Hi Kodem team"), and the Latin
+      // fallback when the account name is Hebrew — the PDF cannot render it.
+      { name: "short_name", label: "Short Name", type: "text", section: "Billing" },
       { name: "tax_id", label: "Tax ID (ח.פ. / ע.מ.)", type: "text", section: "Billing" },
       { name: "vat_exempt", label: "VAT Exempt", type: "boolean", defaultValue: false, section: "Billing" },
     ],
@@ -565,7 +569,32 @@ export const OBJECTS: Record<string, ObjectDef> = {
     relatedLists: [
       { object: "time_entries", foreignKey: "monthly_summary_id", title: "Time Entries", columns: ["task_id", "date", "duration", "hourly_rate"] },
       { object: "invoices", foreignKey: "monthly_summary_id", title: "Invoice", columns: ["invoice_number", "status", "total_amount", "balance"] },
+      { object: "email_log", foreignKey: "entity_id", title: "Emails Sent", columns: ["sent_at", "status", "subject"] },
     ],
+  },
+
+  // What was emailed to a client, and whether it arrived. Written only by the
+  // send-summary-email edge function; registered so the send history renders
+  // as a related list with no bespoke page code.
+  email_log: {
+    name: "email_log",
+    singular: "Email",
+    plural: "Emails Sent",
+    icon: Mail,
+    titleFields: ["subject"],
+    highlightFields: ["sent_at", "status"],
+    searchFields: ["subject"],
+    inNav: false,
+    fields: [
+      { name: "subject", label: "Subject", type: "text", readOnly: true, section: "Message", showInList: true },
+      { name: "sent_at", label: "Sent", type: "date", readOnly: true, section: "Message", showInList: true },
+      { name: "status", label: "Status", type: "picklist", readOnly: true, options: opts("sent", "failed"), section: "Message", showInList: true },
+      { name: "to_addresses", label: "To", type: "text", readOnly: true, section: "Message" },
+      { name: "body", label: "Message", type: "textarea", readOnly: true, section: "Message" },
+      { name: "error", label: "Error", type: "textarea", readOnly: true, section: "Message" },
+      { name: "sent_by_email", label: "Sent By", type: "email", readOnly: true, section: "Message" },
+    ],
+    relatedLists: [],
   },
 
   // Team members — not a CRM object users create records in; registered so

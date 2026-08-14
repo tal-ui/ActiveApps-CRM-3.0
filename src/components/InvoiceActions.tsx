@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Banknote, Download, ExternalLink, Eye, Send, Stamp } from "lucide-react";
-import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { describeFunctionError } from "../lib/functionError";
 import { useLookupMaps } from "../lib/lookups";
 import { fetchWorkspaceSettings } from "../lib/workspaceSettings";
 import { DEFAULT_CURRENCY } from "../lib/format";
@@ -125,38 +125,6 @@ export default function InvoiceActions({
       })),
     });
     setBusy(false);
-  }
-
-  // Turns a Green Invoice error envelope into something worth reading. The
-  // provider's own validation message is the most useful thing we can show —
-  // it names the field that's wrong.
-  async function describeFunctionError(e: unknown): Promise<string> {
-    if (e instanceof FunctionsHttpError) {
-      let body: { error?: string; detail?: string } | null = null;
-      try {
-        body = (await e.context.json()) as { error?: string; detail?: string };
-      } catch {
-        /* error body wasn't JSON */
-      }
-      if (body?.error === "not_configured") {
-        return "Green Invoice isn't connected yet — add the API credentials in Settings → Tax Invoicing.";
-      }
-      if (body?.error === "invalid_key") {
-        return "Green Invoice rejected the API credentials.";
-      }
-      if (body?.detail) {
-        // Provider errors arrive as a JSON string; surface the message alone.
-        try {
-          const inner = JSON.parse(body.detail) as { errorMessage?: string };
-          if (inner?.errorMessage) return `Green Invoice: ${inner.errorMessage}`;
-        } catch {
-          /* not nested JSON — show it as-is */
-        }
-        return body.detail;
-      }
-      return e.message;
-    }
-    return String((e as Error)?.message ?? e);
   }
 
   // Builds the document at Green Invoice and shows it, without allocating a
