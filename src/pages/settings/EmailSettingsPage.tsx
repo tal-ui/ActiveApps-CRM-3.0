@@ -13,6 +13,7 @@ import {
   DEFAULT_EMAIL_SUBJECT,
   PLACEHOLDER_HELP,
 } from "../../lib/emailTemplate";
+import DeliverabilityPanel from "../../components/DeliverabilityPanel";
 import {
   Button,
   ConfirmModal,
@@ -41,6 +42,8 @@ export default function EmailSettingsPage() {
   const [senderPhone, setSenderPhone] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
   const [subjectTemplate, setSubjectTemplate] = useState(DEFAULT_EMAIL_SUBJECT);
+  const [dkimSelector, setDkimSelector] = useState("");
+  const [dmarcRua, setDmarcRua] = useState("");
   const [bodyTemplate, setBodyTemplate] = useState(DEFAULT_EMAIL_BODY);
 
   // Gmail SMTP — integrations row key = "email_smtp". Same invariant as the
@@ -67,6 +70,8 @@ export default function EmailSettingsPage() {
       setSenderPhone(s.emailSenderPhone);
       setSenderEmail(s.emailSenderEmail);
       setSubjectTemplate(s.emailSubjectTemplate);
+      setDkimSelector(s.emailDkimSelector);
+      setDmarcRua(s.emailDmarcRua);
       setBodyTemplate(s.emailBodyTemplate);
       setLoading(false);
     });
@@ -93,6 +98,8 @@ export default function EmailSettingsPage() {
       emailSenderName: senderName.trim(),
       emailSenderPhone: senderPhone.trim(),
       emailSenderEmail: senderEmail.trim(),
+      emailDkimSelector: dkimSelector.trim(),
+      emailDmarcRua: dmarcRua.trim(),
       emailSubjectTemplate: subjectTemplate,
       emailBodyTemplate: bodyTemplate,
     };
@@ -493,6 +500,13 @@ export default function EmailSettingsPage() {
           delivers one message to your own address and nowhere else.
         </p>
       </section>
+
+      <DeliverabilityPanel
+        dkimSelector={dkimSelector}
+        dmarcRua={dmarcRua}
+        onSelectorChange={setDkimSelector}
+        onRuaChange={setDmarcRua}
+      />
 
       {showDisconnect && (
         <ConfirmModal

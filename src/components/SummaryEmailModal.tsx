@@ -13,6 +13,7 @@ import {
   loadSummaryEmailContext,
   type SummaryEmailContext,
 } from "../lib/summaryEmail";
+import { authWarning, evaluate, fetchEmailAuth } from "../lib/emailAuth";
 import {
   Button,
   ConfirmModal,
@@ -84,6 +85,7 @@ export default function SummaryEmailModal({
   const [checking, setChecking] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [authNote, setAuthNote] = useState("");
 
   const invoice = ctx?.invoice ?? null;
   const issued = !!invoice?.external_doc_number;
@@ -131,6 +133,23 @@ export default function SummaryEmailModal({
       cancelled = true;
     };
   }, [summaryId]);
+
+  // Fired in parallel with everything else and never awaited by anything.
+  // Deliberately not folded into the dryRun call, which gates Send: hanging
+  // the send button on a DNS round trip to produce a warning that never blocks
+  // would be exactly backwards. A module cache makes reopens free.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const records = await fetchEmailAuth();
+      if (cancelled || !records) return;
+      const { spf, dkim, dmarc } = evaluate(records);
+      setAuthNote(authWarning(records.domain, spf, dkim, dmarc));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const vars = useMemo(() => {
     if (!ctx) return null;
@@ -441,6 +460,19 @@ export default function SummaryEmailModal({
                     Nothing to fill {blanks.map((b) => `{{${b}}}`).join(", ")}{" "}
                     with, so the message would go out with a gap in it. Fill
                     these in on Settings → Email; sending is blocked until then.
+                  </Warning>
+                )}
+                {authNote && (
+                  <Warning>
+                    {authNote}{" "}
+                    <a
+                      href="/settings/email"
+                      className="underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Settings → Email
+                    </a>
                   </Warning>
                 )}
                 {previousSend && (

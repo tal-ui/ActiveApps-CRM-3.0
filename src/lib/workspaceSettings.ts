@@ -35,6 +35,10 @@ export interface WorkspaceSettings {
   emailSenderName: string;
   emailSenderPhone: string;
   emailSenderEmail: string;
+  /** The DKIM selector in use, once known. Configuration, not a verdict. */
+  emailDkimSelector: string;
+  /** Where DMARC aggregate reports should go. An input to the record we generate. */
+  emailDmarcRua: string;
   emailSubjectTemplate: string;
   /** Includes the sign-off. One field, not body + signature: two would need a
    *  join rule nobody remembers, for six lines of text. */
@@ -59,6 +63,8 @@ export const EMPTY_SETTINGS: WorkspaceSettings = {
   emailSenderName: "",
   emailSenderPhone: "",
   emailSenderEmail: "",
+  emailDkimSelector: "",
+  emailDmarcRua: "",
   emailSubjectTemplate: DEFAULT_EMAIL_SUBJECT,
   emailBodyTemplate: DEFAULT_EMAIL_BODY,
 };
@@ -91,6 +97,8 @@ function coerce(raw: Record<string, unknown>): WorkspaceSettings {
     emailSenderEmail: str(raw.emailSenderEmail),
     // Falling back to the defaults means the feature works before anyone opens
     // the settings page.
+    emailDkimSelector: str(raw.emailDkimSelector),
+    emailDmarcRua: str(raw.emailDmarcRua),
     emailSubjectTemplate: str(raw.emailSubjectTemplate, DEFAULT_EMAIL_SUBJECT),
     emailBodyTemplate: str(raw.emailBodyTemplate, DEFAULT_EMAIL_BODY),
   };
