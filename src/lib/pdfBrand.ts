@@ -427,21 +427,15 @@ export function drawFooter(
 
 /* ---------- Tables ---------- */
 
-/**
- * The shared table look: no cell grid, zebra rows, a mono head on navy.
- * `muted` renders a table that is visibly not being charged for — used by the
- * internal-hours section, where a navy head and mint totals would read as a
- * bill.
- */
-export function tableTheme(mono: MonoFont, opts?: { muted?: boolean }) {
-  const muted = !!opts?.muted;
+/** The shared table look: no cell grid, zebra rows, a mono head on navy. */
+export function tableTheme(mono: MonoFont) {
   return {
     theme: "plain" as const,
     styles: {
       font: "helvetica",
       fontSize: 8.5,
       cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
-      textColor: (muted ? INK_FAINT : INK_SOFT) as RGB,
+      textColor: INK_SOFT as RGB,
       lineColor: RULE as RGB,
       lineWidth: 0,
       overflow: "linebreak" as const,
@@ -450,11 +444,11 @@ export function tableTheme(mono: MonoFont, opts?: { muted?: boolean }) {
       font: mono,
       fontStyle: "bold" as const,
       fontSize: 7,
-      fillColor: (muted ? SURFACE : INK) as RGB,
-      textColor: (muted ? INK_FAINT : PAPER) as RGB,
+      fillColor: INK as RGB,
+      textColor: PAPER as RGB,
       cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
     },
-    alternateRowStyles: { fillColor: (muted ? PAPER : SURFACE) as RGB },
+    alternateRowStyles: { fillColor: SURFACE as RGB },
   };
 }
 

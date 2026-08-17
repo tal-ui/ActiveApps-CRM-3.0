@@ -5,7 +5,6 @@ import {
   INK_FAINT,
   MARGIN,
   RULE,
-  SURFACE,
   bytesToBase64,
   brandSettings,
   drawFooter,
@@ -106,15 +105,15 @@ export async function buildMonthlyReport(
   });
 
   /* --- The month in three figures.
-         Total, billable and internal are shown together so the document
-         reconciles against itself: every hour counted in the total appears in
-         one of the two tables below. --- */
+         Only billable work is itemised below, so naming the internal hours
+         here is what lets the three numbers be reconciled: without it, a
+         reader seeing a total larger than the billable figure has no account
+         of the difference. --- */
   const sorted = [...entries].sort((a, b) => a.date - b.date);
   const billable = sorted.filter((e) => e.is_billable);
-  const internal = sorted.filter((e) => !e.is_billable);
   const sum = (list: ReportEntry[]) => list.reduce((s, e) => s + e.duration, 0);
   const billableHours = sum(billable);
-  const internalHours = sum(internal);
+  const internalHours = sum(sorted.filter((e) => !e.is_billable));
   const totalHours = billableHours + internalHours;
 
   const tilesEnd = drawStatTiles(
@@ -131,7 +130,7 @@ export async function buildMonthlyReport(
     accent,
   );
 
-  /* --- Detail tables, numbered from 1 per section and sorted by date.
+  /* --- Detail table, numbered from 1 and sorted by date.
          Labour hours only — no commercial numbers anywhere in this document. --- */
   const itemRows = (list: ReportEntry[]): RowInput[] =>
     list.map((e, i) => [
@@ -154,7 +153,7 @@ export async function buildMonthlyReport(
     },
   ];
 
-  const drawTable = (startY: number, body: RowInput[], muted?: boolean) => {
+  const drawTable = (startY: number, body: RowInput[]) => {
     autoTable(doc, {
       startY,
       margin: { left: MARGIN, right: MARGIN, bottom: 52 },
@@ -168,7 +167,7 @@ export async function buildMonthlyReport(
         if (data.section !== "body" || data.column.index !== 0) return;
         drawRule(doc, data.cell.x, data.cell.y + data.row.height, contentW, RULE, 0.4);
       },
-      ...tableTheme(mono, { muted }),
+      ...tableTheme(mono),
     });
     return tableEnd(doc, startY);
   };
@@ -182,23 +181,13 @@ export async function buildMonthlyReport(
     return drawSectionHeading(doc, mono, MARGIN, y, contentW, title, { accent, meta });
   };
 
-  let y = headingAt(tilesEnd + 34, "Billable Items", `${billableHours.toFixed(2)} hrs`);
-  y = drawTable(y, [
-    ...itemRows(billable),
-    totalRow(billableHours, accent, onAccent(accent)),
-  ]);
-
-  // Internal hours were previously counted in the total and listed nowhere, so
-  // the two figures could not be reconciled. Muted, and never mint: mint reads
-  // as billable.
-  if (internal.length > 0) {
-    y = headingAt(y + 30, "Internal / Non-billable", `${internalHours.toFixed(2)} hrs`);
-    drawTable(
-      y,
-      [...itemRows(internal), totalRow(internalHours, SURFACE, INK)],
-      true,
-    );
-  }
+  // Billable work only. Non-billable entries are deliberately not itemised —
+  // they are internal, and the client is not being asked to read them. The
+  // Internal tile above still names and quantifies them, so the three figures
+  // reconcile on their face even though the hours behind one of them are not
+  // listed.
+  const y = headingAt(tilesEnd + 34, "Billable Items", `${billableHours.toFixed(2)} hrs`);
+  drawTable(y, [...itemRows(billable), totalRow(billableHours, accent, onAccent(accent))]);
 
   drawFooter(doc, mono, { footerText, pageNumbers: true });
   return doc;
