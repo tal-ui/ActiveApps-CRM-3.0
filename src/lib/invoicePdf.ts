@@ -1,11 +1,24 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { fmtDate, fmtMoneyAscii } from "./format";
-
-const NAVY: [number, number, number] = [12, 18, 26];
-const MINT: [number, number, number] = [60, 201, 152];
-const GRAY: [number, number, number] = [110, 114, 120];
-const LIGHT: [number, number, number] = [244, 246, 248];
+import {
+  INK,
+  INK_FAINT,
+  INK_SOFT,
+  MARGIN,
+  RADIUS,
+  RULE,
+  SURFACE,
+  brandSettings,
+  drawFooter,
+  drawLabel,
+  drawRule,
+  drawWordmark,
+  onAccent,
+  registerMono,
+  tableEnd,
+  tableTheme,
+} from "./pdfBrand";
 
 /**
  * Issuer identity for a legally-formed Israeli tax invoice: the business's
@@ -99,50 +112,37 @@ function money(n: number, currency: string): string {
   return fmtMoneyAscii(n, currency);
 }
 
-async function loadLogoDataUrl(): Promise<string | null> {
-  try {
-    const res = await fetch("/aa-logo.png");
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 40;
+  const margin = MARGIN;
+  const contentW = pageWidth - margin * 2;
 
-  /* Header — light print variant */
-  const logo = await loadLogoDataUrl();
-  if (logo) {
-    try {
-      // "FAST" matters more than it looks: without a compression flag jsPDF
-      // stores the decoded logo raw and the file balloons from 89 KB to
-      // 5.6 MB — fine for a local download, rude as an email attachment.
-      doc.addImage(logo, "PNG", margin, 34, 30, 30, undefined, "FAST");
-    } catch {
-      /* optional */
-    }
-  }
-  const wordmarkX = logo ? margin + 40 : margin;
+  const mono = await registerMono(doc);
+  const brand = await brandSettings();
+  const accent = brand.accent;
+
+  /* Header — the brand's light print variant, shared with the hours report */
+  await drawWordmark(doc, mono, margin, 34);
+
+  // Document title + number, right aligned against the wordmark.
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.setTextColor(...NAVY);
-  doc.text("ACTIVE", wordmarkX, 50);
-  const activeW = doc.getTextWidth("ACTIVE");
-  doc.setTextColor(...MINT);
-  doc.text("APPS", wordmarkX + activeW, 50);
-  doc.setFont("courier", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(94, 98, 104);
-  doc.text("T E C H   O R C H E S T R A T I O N", wordmarkX, 62);
+  doc.setFontSize(24);
+  doc.setTextColor(...INK);
+  doc.text(data.title, pageWidth - margin, 50, { align: "right" });
+  // Untracked and unaltered: this is the number a client's finance system
+  // copies or parses off the document, and wide tracking makes a PDF extractor
+  // read it back as "5 0 0 3 3".
+  drawLabel(doc, data.number, pageWidth - margin, 66, {
+    mono,
+    size: 10,
+    color: INK,
+    align: "right",
+    uppercase: false,
+    track: 0,
+  });
+
+  drawRule(doc, margin, 78, contentW, accent, 1);
 
   // Issuer identity — required on an Israeli tax invoice.
   const issuerLines = data.issuer
@@ -156,108 +156,87 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
   issuerLines.forEach((line, i) => {
     doc.setFont("helvetica", i === 0 ? "bold" : "normal");
     doc.setFontSize(i === 0 ? 8 : 7.5);
-    doc.setTextColor(...GRAY);
-    doc.text(line, margin, 76 + i * 10);
+    doc.setTextColor(...(i === 0 ? INK_SOFT : INK_FAINT));
+    doc.text(line, margin, 94 + i * 10);
   });
 
-  // Document title + number (right aligned)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
-  doc.setTextColor(...NAVY);
-  doc.text(data.title, pageWidth - margin, 50, { align: "right" });
-  doc.setFont("courier", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...MINT);
-  doc.text(data.number, pageWidth - margin, 66, { align: "right" });
-
   /* Meta block — pushed down far enough to clear the issuer block */
-  const metaY = Math.max(110, 76 + issuerLines.length * 10 + 12);
-  doc.setFont("courier", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...GRAY);
-  doc.text(data.partyLabel, margin, metaY);
+  const metaY = Math.max(126, 94 + issuerLines.length * 10 + 14);
+  drawLabel(doc, data.partyLabel, margin, metaY, { mono, size: 7 });
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(...NAVY);
+  doc.setTextColor(...INK);
   doc.text(data.partyName, margin, metaY + 16);
   let partyY = metaY + 16;
   for (const line of (data.partyLines ?? []).filter((l): l is string => !!l && !!l.trim())) {
     partyY += 12;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...GRAY);
+    doc.setTextColor(...INK_FAINT);
     doc.text(line, margin, partyY);
   }
   if (data.subLine) {
     partyY += 13;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setTextColor(...GRAY);
+    doc.setTextColor(...INK_SOFT);
     doc.text(data.subLine, margin, partyY);
   }
 
   data.meta.forEach(([label, value], i) => {
     const y = metaY + i * 16;
-    doc.setFont("courier", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...GRAY);
-    doc.text(label, pageWidth - margin - 130, y);
+    drawLabel(doc, label, pageWidth - margin - 130, y, { mono, size: 7 });
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...NAVY);
+    doc.setTextColor(...INK);
     doc.text(value, pageWidth - margin, y, { align: "right" });
   });
 
   /* Line items */
   autoTable(doc, {
     startY: Math.max(partyY, metaY + data.meta.length * 16) + 22,
-    margin: { left: margin, right: margin },
-    head: [["Description", data.qtyHeader, "Unit Price", "Amount"]],
+    margin: { left: margin, right: margin, bottom: 52 },
+    // Uppercase to match the label treatment the mono head is set in.
+    head: [["DESCRIPTION", data.qtyHeader.toUpperCase(), "UNIT PRICE", "AMOUNT"]],
     body: data.lines.map((l) => [
       l.description,
       { content: l.quantity.toFixed(2), styles: { halign: "right" as const } },
       { content: money(l.unitPrice, data.currency), styles: { halign: "right" as const } },
       { content: money(l.total, data.currency), styles: { halign: "right" as const } },
     ]),
-    theme: "grid",
-    styles: {
-      fontSize: 9,
-      cellPadding: 6,
-      textColor: [40, 44, 50],
-      lineColor: [225, 228, 232],
-      lineWidth: 0.5,
-    },
-    headStyles: {
-      fillColor: NAVY,
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      fontSize: 8,
-    },
     columnStyles: {
       1: { cellWidth: 80 },
       2: { cellWidth: 90 },
       3: { cellWidth: 95 },
     },
+    didDrawCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 0) return;
+      drawRule(doc, data.cell.x, data.cell.y + data.row.height, contentW, RULE, 0.4);
+    },
+    ...tableTheme(mono),
   });
 
   /* Totals box */
-  const afterTable =
-    (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-      ?.finalY ?? 300;
+  const afterTable = tableEnd(doc, 300);
   const totalsX = pageWidth - margin - 200;
-  let ty = afterTable + 18;
+  let ty = afterTable + 22;
   const totalRow = (label: string, value: string, strong = false) => {
     if (strong) {
-      doc.setFillColor(...MINT);
-      doc.roundedRect(totalsX - 8, ty - 11, 208, 20, 3, 3, "F");
-      doc.setTextColor(...NAVY);
+      doc.setFillColor(...accent);
+      doc.roundedRect(totalsX - 8, ty - 11, 208, 20, RADIUS - 2, RADIUS - 2, "F");
+      const ink = onAccent(accent);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(...ink);
+      doc.text(label, totalsX, ty);
+      doc.text(value, pageWidth - margin, ty, { align: "right" });
     } else {
-      doc.setTextColor(...GRAY);
+      drawLabel(doc, label, totalsX, ty, { mono, size: 7.5, bold: false });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...INK_SOFT);
+      doc.text(value, pageWidth - margin, ty, { align: "right" });
     }
-    doc.setFont(strong ? "helvetica" : "courier", strong ? "bold" : "normal");
-    doc.setFontSize(strong ? 10 : 8);
-    doc.text(label, totalsX, ty);
-    doc.text(value, pageWidth - margin, ty, { align: "right" });
     ty += 20;
   };
   totalRow("SUBTOTAL", money(data.subtotal, data.currency));
@@ -279,25 +258,24 @@ export async function generateDocumentPdf(data: DocumentPdfData): Promise<void> 
 
   /* Notes */
   if (data.notes) {
-    doc.setFillColor(...LIGHT);
-    doc.roundedRect(margin, ty + 6, pageWidth - margin * 2, 36, 4, 4, "F");
-    doc.setFont("courier", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...GRAY);
-    doc.text("NOTES", margin + 10, ty + 20);
+    const body = doc.splitTextToSize(data.notes, contentW - 20) as string[];
+    const boxH = 26 + body.length * 11;
+    doc.setFillColor(...SURFACE);
+    doc.setDrawColor(...RULE);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, ty + 6, contentW, boxH, RADIUS, RADIUS, "FD");
+    drawLabel(doc, "Notes", margin + 10, ty + 21, { mono, size: 6.5 });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(60, 65, 72);
-    doc.text(doc.splitTextToSize(data.notes, pageWidth - margin * 2 - 20), margin + 10, ty + 32);
+    doc.setTextColor(...INK_SOFT);
+    doc.text(body, margin + 10, ty + 34);
   }
 
-  /* Footer */
-  const pageHeight = doc.internal.pageSize.getHeight();
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...GRAY);
-  doc.text(data.footerText?.trim() || "Generated by ActiveApps CRM", margin, pageHeight - 24);
-  doc.text("activeapps.io", pageWidth - margin, pageHeight - 24, { align: "right" });
+  // The caller's footerText wins; otherwise the workspace setting, which is
+  // the same value InvoiceActions already passes in.
+  drawFooter(doc, mono, {
+    footerText: data.footerText?.trim() || brand.footerText,
+  });
 
   doc.save(data.filename);
 }

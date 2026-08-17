@@ -1,5 +1,27 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type RowInput } from "jspdf-autotable";
+import {
+  INK,
+  INK_FAINT,
+  MARGIN,
+  RULE,
+  SURFACE,
+  bytesToBase64,
+  brandSettings,
+  drawFooter,
+  drawLabel,
+  drawRule,
+  drawSectionHeading,
+  drawStatTiles,
+  drawWordmark,
+  onAccent,
+  registerMono,
+  tableEnd,
+  tableTheme,
+  type RGB,
+} from "./pdfBrand";
+
+export { bytesToBase64 };
 
 export interface ReportEntry {
   date: number;
@@ -8,26 +30,6 @@ export interface ReportEntry {
   description: string | null;
   project: string;
   task: string;
-}
-
-const NAVY: [number, number, number] = [12, 18, 26];
-const MINT: [number, number, number] = [60, 201, 152];
-const GRAY: [number, number, number] = [110, 114, 120];
-const LIGHT: [number, number, number] = [244, 246, 248];
-
-async function loadLogoDataUrl(): Promise<string | null> {
-  try {
-    const res = await fetch("/aa-logo.png");
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
 }
 
 function fmtD(ms: number): string {
@@ -44,13 +46,29 @@ export interface MonthlyReportOpts {
 
 /** `ActiveApps-Hours-July-2026.pdf` — shared by the download and the email. */
 export function monthlyReportFilename(monthLabel: string): string {
+  // Deliberately fixed rather than derived from workspaceName: the monthly
+  // summary identifies a previous export by this exact name when it replaces
+  // one, so a rename would orphan every attachment already filed.
   return `ActiveApps-Hours-${monthLabel.replace(/\s+/g, "-")}.pdf`;
 }
+
+// Uppercase and terse: the head is set in the brand's mono label face, which
+// is wider than Helvetica, and "Delivered / Completion Date" wrapped to three
+// lines in a 66pt column.
+const HEAD = ["ITEM", "DELIVERED", "SUBJECT", "DESCRIPTION", "HOURS"];
+
+const COLUMNS = {
+  0: { cellWidth: 36, halign: "center" as const },
+  1: { cellWidth: 66 },
+  2: { cellWidth: 100 },
+  // Description takes all remaining width (~263pt on A4)
+  4: { cellWidth: 50, halign: "right" as const },
+};
 
 /**
  * Renders the report and hands back the document instead of saving it, so the
  * same bytes can be downloaded or attached to an email. Browser-only: the
- * wordmark logo is fetched and read through FileReader.
+ * wordmark logo and the brand's mono face are both fetched.
  */
 export async function buildMonthlyReport(
   opts: MonthlyReportOpts,
@@ -58,81 +76,63 @@ export async function buildMonthlyReport(
   const { monthLabel, projectFilter, entries } = opts;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 40;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const contentW = pageWidth - MARGIN * 2;
 
-  /* --- Header (light print variant: navy + mint on white) --- */
-  const logo = await loadLogoDataUrl();
-  if (logo) {
-    try {
-      // "FAST" matters more than it looks: without a compression flag jsPDF
-      // stores the decoded logo raw and the file balloons from 89 KB to
-      // 5.6 MB — fine for a local download, rude as an email attachment.
-      doc.addImage(logo, "PNG", margin, 34, 30, 30, undefined, "FAST");
-    } catch {
-      /* logo optional */
-    }
-  }
-  const wordmarkX = logo ? margin + 40 : margin;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.setTextColor(...NAVY);
-  doc.text("ACTIVE", wordmarkX, 50);
-  const activeW = doc.getTextWidth("ACTIVE");
-  doc.setTextColor(...MINT);
-  doc.text("APPS", wordmarkX + activeW, 50);
-  doc.setFont("courier", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(94, 98, 104);
-  doc.text("T E C H   O R C H E S T R A T I O N", wordmarkX, 62);
+  const mono = await registerMono(doc);
+  const { accent, footerText } = await brandSettings();
+
+  /* --- Header: the brand's light print variant --- */
+  await drawWordmark(doc, mono, MARGIN, 34);
+  drawRule(doc, MARGIN, 76, contentW, accent, 1);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(19);
-  doc.setTextColor(...NAVY);
-  doc.text("Monthly Hours Breakdown", margin, 102);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...GRAY);
-  doc.text(`${monthLabel}  ·  ${projectFilter}`, margin, 118);
+  doc.setFontSize(20);
+  doc.setTextColor(...INK);
+  doc.text("Monthly Hours Breakdown", MARGIN, 104);
 
-  /* --- Summary boxes — labor hours only, no commercial numbers --- */
-  const totalHours = entries.reduce((s, e) => s + e.duration, 0);
-  const billableHours = entries
-    .filter((e) => e.is_billable)
-    .reduce((s, e) => s + e.duration, 0);
-
-  const boxes = [
-    { label: "TOTAL HOURS", value: totalHours.toFixed(1) },
-    { label: "BILLABLE", value: billableHours.toFixed(1) },
-  ];
-  const boxW = (pageWidth - margin * 2 - 10) / 2;
-  boxes.forEach((b, i) => {
-    const x = margin + i * (boxW + 10);
-    doc.setFillColor(...LIGHT);
-    doc.setDrawColor(225, 228, 232);
-    doc.roundedRect(x, 134, boxW, 46, 4, 4, "FD");
-    doc.setFont("courier", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...GRAY);
-    doc.text(b.label, x + 10, 150);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(...NAVY);
-    doc.text(b.value, x + 10, 168);
+  // The account name can be absent — summaryEmail drops it rather than print
+  // Hebrew the built-in fonts cannot render — so the separator is conditional
+  // instead of leaving a line ending in a dangling middot.
+  const subtitle = [monthLabel, projectFilter.trim()].filter(Boolean).join("  ·  ");
+  drawLabel(doc, subtitle, MARGIN, 120, {
+    mono,
+    size: 8,
+    color: INK_FAINT,
+    bold: false,
+    // Lightly tracked: this line names the client, and a reader copying it out
+    // should get the name back rather than its letters.
+    track: 0.04,
   });
 
-  /* --- Detail table: billable items only, auto-numbered from 1 and
-         sorted by date ascending; totals are labor hours only. --- */
+  /* --- The month in three figures.
+         Total, billable and internal are shown together so the document
+         reconciles against itself: every hour counted in the total appears in
+         one of the two tables below. --- */
   const sorted = [...entries].sort((a, b) => a.date - b.date);
   const billable = sorted.filter((e) => e.is_billable);
+  const internal = sorted.filter((e) => !e.is_billable);
+  const sum = (list: ReportEntry[]) => list.reduce((s, e) => s + e.duration, 0);
+  const billableHours = sum(billable);
+  const internalHours = sum(internal);
+  const totalHours = billableHours + internalHours;
 
-  const HEAD = [
-    "Item #",
-    "Delivered / Completion Date",
-    "Subject",
-    "Description",
-    "# of Hours",
-  ];
+  const tilesEnd = drawStatTiles(
+    doc,
+    mono,
+    MARGIN,
+    138,
+    contentW,
+    [
+      { label: "Total Hours", value: totalHours.toFixed(2) },
+      { label: "Billable", value: billableHours.toFixed(2), accented: true },
+      { label: "Internal", value: internalHours.toFixed(2) },
+    ],
+    accent,
+  );
 
+  /* --- Detail tables, numbered from 1 per section and sorted by date.
+         Labour hours only — no commercial numbers anywhere in this document. --- */
   const itemRows = (list: ReportEntry[]): RowInput[] =>
     list.map((e, i) => [
       { content: String(i + 1), styles: { halign: "center" as const } },
@@ -142,97 +142,65 @@ export async function buildMonthlyReport(
       { content: e.duration.toFixed(2), styles: { halign: "right" as const } },
     ]);
 
-  const drawTable = (startY: number, body: RowInput[]) => {
-    autoTable(doc, {
-      startY,
-      margin: { left: margin, right: margin, bottom: 46 },
-      head: [HEAD],
-      body,
-      theme: "grid",
-      styles: {
-        fontSize: 8.5,
-        cellPadding: 5,
-        textColor: [40, 44, 50],
-        lineColor: [225, 228, 232],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: NAVY,
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 8,
-      },
-      columnStyles: {
-        0: { cellWidth: 36, halign: "center" },
-        1: { cellWidth: 66 },
-        2: { cellWidth: 100 },
-        // Description takes all remaining width (~263pt on A4)
-        4: { cellWidth: 50, halign: "right" },
-      },
-    });
-    return (
-      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-        ?.finalY ?? startY
-    );
-  };
-
-  const pageHeightAll = doc.internal.pageSize.getHeight();
-  const sectionHeading = (y: number, title: string): number => {
-    // Keep the heading with its table — break the page if too close to the bottom
-    if (y + 64 > pageHeightAll - 46) {
-      doc.addPage();
-      y = 50;
-    }
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(...NAVY);
-    doc.text(title, margin, y);
-    return y + 8;
-  };
-
-  /* Billable items — main table, ends with the billable hours total */
-  const y = sectionHeading(206, "Billable Items");
-  const billableBody = itemRows(billable);
-  billableBody.push([
+  const totalRow = (hours: number, fill: RGB, text: RGB): RowInput => [
     {
       content: "TOTAL HOURS",
       colSpan: 4,
-      styles: {
-        fontStyle: "bold",
-        halign: "right",
-        fillColor: MINT,
-        textColor: NAVY,
-      },
+      styles: { fontStyle: "bold", halign: "right", fillColor: fill, textColor: text },
     },
     {
-      content: billableHours.toFixed(2),
-      styles: {
-        fontStyle: "bold",
-        halign: "right",
-        fillColor: MINT,
-        textColor: NAVY,
-      },
+      content: hours.toFixed(2),
+      styles: { fontStyle: "bold", halign: "right", fillColor: fill, textColor: text },
     },
-  ]);
-  drawTable(y, billableBody);
+  ];
 
-  /* --- Footer on every page --- */
-  const pageCount = doc.getNumberOfPages();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...GRAY);
-    doc.text("Generated by ActiveApps CRM", margin, pageHeight - 24);
-    doc.text(
-      `Page ${i} of ${pageCount}`,
-      pageWidth - margin,
-      pageHeight - 24,
-      { align: "right" },
+  const drawTable = (startY: number, body: RowInput[], muted?: boolean) => {
+    autoTable(doc, {
+      startY,
+      margin: { left: MARGIN, right: MARGIN, bottom: 52 },
+      head: [HEAD],
+      body,
+      columnStyles: COLUMNS,
+      // A hairline under each row instead of a box around each cell. Anchored
+      // to the row, not the cell: a wrapped description makes the row taller
+      // than the Item cell, and a cell-anchored rule then cuts through it.
+      didDrawCell: (data) => {
+        if (data.section !== "body" || data.column.index !== 0) return;
+        drawRule(doc, data.cell.x, data.cell.y + data.row.height, contentW, RULE, 0.4);
+      },
+      ...tableTheme(mono, { muted }),
+    });
+    return tableEnd(doc, startY);
+  };
+
+  /** Keep a heading with its table rather than orphaning it at a page foot. */
+  const headingAt = (y: number, title: string, meta: string): number => {
+    if (y + 72 > pageHeight - 52) {
+      doc.addPage();
+      y = 60;
+    }
+    return drawSectionHeading(doc, mono, MARGIN, y, contentW, title, { accent, meta });
+  };
+
+  let y = headingAt(tilesEnd + 34, "Billable Items", `${billableHours.toFixed(2)} hrs`);
+  y = drawTable(y, [
+    ...itemRows(billable),
+    totalRow(billableHours, accent, onAccent(accent)),
+  ]);
+
+  // Internal hours were previously counted in the total and listed nowhere, so
+  // the two figures could not be reconciled. Muted, and never mint: mint reads
+  // as billable.
+  if (internal.length > 0) {
+    y = headingAt(y + 30, "Internal / Non-billable", `${internalHours.toFixed(2)} hrs`);
+    drawTable(
+      y,
+      [...itemRows(internal), totalRow(internalHours, SURFACE, INK)],
+      true,
     );
   }
 
+  drawFooter(doc, mono, { footerText, pageNumbers: true });
   return doc;
 }
 
@@ -260,17 +228,4 @@ export async function renderMonthlyReportBase64(
   opts: MonthlyReportOpts,
 ): Promise<string> {
   return bytesToBase64(await renderMonthlyReportBytes(opts));
-}
-
-/**
- * Chunked on purpose: String.fromCharCode(...bytes) blows the call stack once
- * the PDF passes ~100 KB, which a busy month easily does.
- */
-export function bytesToBase64(bytes: Uint8Array): string {
-  const CHUNK = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
 }
