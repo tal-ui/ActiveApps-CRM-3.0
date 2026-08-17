@@ -7,6 +7,7 @@ import {
   RULE,
   bytesToBase64,
   brandSettings,
+  drawBadge,
   drawFooter,
   drawLabel,
   drawRule,
@@ -85,48 +86,57 @@ export async function buildMonthlyReport(
   await drawWordmark(doc, mono, MARGIN, 34);
   drawRule(doc, MARGIN, 76, contentW, accent, 1);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(...INK);
-  doc.text("Monthly Hours Breakdown", MARGIN, 104);
+  /* Who and when lead the page. The document type is obvious from the context
+     it arrives in — attached to the month's invoice — while the two things a
+     reader checks first are the client and the period, so those carry the
+     weight and the document type becomes an eyebrow above them. */
+  const client = projectFilter.trim();
+  // The account name can be absent: summaryEmail drops it rather than print
+  // Hebrew the built-in fonts cannot render. The document type then takes the
+  // headline back rather than leaving a blank line.
+  const headline = client || "Monthly Hours Breakdown";
+  if (client) {
+    drawLabel(doc, "Monthly Hours Breakdown", MARGIN, 98, {
+      mono,
+      size: 7,
+      color: INK_FAINT,
+    });
+  }
 
-  // The account name can be absent — summaryEmail drops it rather than print
-  // Hebrew the built-in fonts cannot render — so the separator is conditional
-  // instead of leaving a line ending in a dangling middot.
-  const subtitle = [monthLabel, projectFilter.trim()].filter(Boolean).join("  ·  ");
-  drawLabel(doc, subtitle, MARGIN, 120, {
-    mono,
-    size: 8,
-    color: INK_FAINT,
-    bold: false,
-    // Lightly tracked: this line names the client, and a reader copying it out
-    // should get the name back rather than its letters.
-    track: 0.04,
+  // The period, as a badge — the accent reads as ink on a fill where it would
+  // fail as type on white. Drawn first so the headline knows what room it has.
+  const badgeW = drawBadge(doc, mono, monthLabel, MARGIN + contentW, 118, {
+    fill: accent,
+    size: 11,
+    align: "right",
   });
 
-  /* --- The month in three figures.
-         Only billable work is itemised below, so naming the internal hours
-         here is what lets the three numbers be reconciled: without it, a
-         reader seeing a total larger than the billable figure has no account
-         of the difference. --- */
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...INK);
+  // Shrink to fit rather than run under the badge: client names vary wildly in
+  // length and a collision would be silent.
+  const room = contentW - badgeW - 16;
+  let headlineSize = 24;
+  doc.setFontSize(headlineSize);
+  while (headlineSize > 12 && doc.getTextWidth(headline) > room) {
+    headlineSize -= 1;
+    doc.setFontSize(headlineSize);
+  }
+  doc.text(headline, MARGIN, 122);
+
+  /* --- The one figure the month comes down to. Non-billable work is not part
+         of this document, so it is neither listed nor counted here. --- */
   const sorted = [...entries].sort((a, b) => a.date - b.date);
   const billable = sorted.filter((e) => e.is_billable);
-  const sum = (list: ReportEntry[]) => list.reduce((s, e) => s + e.duration, 0);
-  const billableHours = sum(billable);
-  const internalHours = sum(sorted.filter((e) => !e.is_billable));
-  const totalHours = billableHours + internalHours;
+  const billableHours = billable.reduce((s, e) => s + e.duration, 0);
 
   const tilesEnd = drawStatTiles(
     doc,
     mono,
     MARGIN,
-    138,
-    contentW,
-    [
-      { label: "Total Hours", value: totalHours.toFixed(2) },
-      { label: "Billable", value: billableHours.toFixed(2), accented: true },
-      { label: "Internal", value: internalHours.toFixed(2) },
-    ],
+    148,
+    (contentW - 20) / 3,
+    [{ label: "Billable Hours", value: billableHours.toFixed(2), accented: true }],
     accent,
   );
 
@@ -181,12 +191,13 @@ export async function buildMonthlyReport(
     return drawSectionHeading(doc, mono, MARGIN, y, contentW, title, { accent, meta });
   };
 
-  // Billable work only. Non-billable entries are deliberately not itemised —
-  // they are internal, and the client is not being asked to read them. The
-  // Internal tile above still names and quantifies them, so the three figures
-  // reconcile on their face even though the hours behind one of them are not
-  // listed.
-  const y = headingAt(tilesEnd + 34, "Billable Items", `${billableHours.toFixed(2)} hrs`);
+  // The section's meta is the item count, not its hours — the hours are
+  // already the tile above and the total row below.
+  const y = headingAt(
+    tilesEnd + 34,
+    "Billable Items",
+    `${billable.length} ${billable.length === 1 ? "item" : "items"}`,
+  );
   drawTable(y, [...itemRows(billable), totalRow(billableHours, accent, onAccent(accent))]);
 
   drawFooter(doc, mono, { footerText, pageNumbers: true });

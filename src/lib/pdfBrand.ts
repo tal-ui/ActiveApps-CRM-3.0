@@ -264,6 +264,41 @@ export function drawLabel(
 /* ---------- Blocks ---------- */
 
 /**
+ * A filled chip carrying a short value — the brand's badge, in print.
+ *
+ * The fill is the accent and the ink is chosen against it, so the text inside
+ * clears contrast even though the same colour would fail as type on white.
+ * Returns the badge's width so callers can lay out around it.
+ */
+export function drawBadge(
+  doc: jsPDF,
+  mono: MonoFont,
+  text: string,
+  x: number,
+  baseline: number,
+  opts: { fill: RGB; size?: number; align?: "left" | "right" },
+): number {
+  const size = opts.size ?? 10;
+  const track = size * 0.06;
+  const label = text.toUpperCase();
+  const padX = size * 0.9;
+  const padY = size * 0.55;
+  doc.setFont(mono, "bold");
+  doc.setFontSize(size);
+  const textW = doc.getTextWidth(label) + track * Math.max(0, label.length - 1);
+  const w = textW + padX * 2;
+  const h = size * 0.78 + padY * 2;
+  const bx = opts.align === "right" ? x - w : x;
+  doc.setFillColor(...opts.fill);
+  doc.roundedRect(bx, baseline - size * 0.72 - padY, w, h, RADIUS - 2, RADIUS - 2, "F");
+  doc.setTextColor(...onAccent(opts.fill));
+  doc.setCharSpace(track);
+  doc.text(label, bx + padX, baseline);
+  doc.setCharSpace(0);
+  return w;
+}
+
+/**
  * Logo, ACTIVEAPPS wordmark and tagline. Returns the y of the block's baseline
  * so callers can flow beneath it instead of guessing another magic number.
  */
