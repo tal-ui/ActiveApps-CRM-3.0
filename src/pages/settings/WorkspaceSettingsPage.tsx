@@ -14,6 +14,7 @@ import {
   Select,
   Spinner,
 } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 type SettingsJson = Record<string, unknown>;
 
@@ -253,9 +254,12 @@ export default function WorkspaceSettingsPage() {
             <Settings2 size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Workspace
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Workspace
+              </h1>
+              <HelpButton topic="/settings/workspace" />
+            </div>
             <p className="label-mono">branding & defaults</p>
           </div>
         </div>
@@ -314,10 +318,6 @@ export default function WorkspaceSettingsPage() {
               </span>
             </div>
           </div>
-          <p className="text-xs text-[var(--text-faint)]">
-            Other stored branding keys (signature labels, footer options) are
-            preserved on save.
-          </p>
         </section>
 
         <section className="bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-lg)] p-5 space-y-4">
@@ -421,10 +421,6 @@ export default function WorkspaceSettingsPage() {
           )}
         </div>
       </section>
-      <p className="text-xs text-[var(--text-faint)] mt-3">
-        When an insight is requested, that record's CRM data (and closely
-        related records) is sent to Anthropic's API. Nothing is sent otherwise.
-      </p>
       {showDisconnect && (
         <ConfirmModal
           title="Disconnect AI Assistant"

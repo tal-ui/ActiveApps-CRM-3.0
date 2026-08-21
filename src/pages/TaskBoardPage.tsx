@@ -7,6 +7,7 @@ import { useLookupMaps } from "../lib/lookups";
 import { fmtDate } from "../lib/format";
 import { Badge, Button, EmptyState, ErrorNote, Spinner } from "../components/ui";
 import KanbanBoard from "../components/KanbanBoard";
+import HelpButton from "../components/HelpButton";
 
 interface TaskRow {
   id: string;
@@ -100,9 +101,12 @@ export default function TaskBoardPage() {
             <CheckSquare size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Task Board
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Task Board
+              </h1>
+              <HelpButton topic="/tasks/board" />
+            </div>
             <p className="label-mono">
               {openCount} open task{openCount === 1 ? "" : "s"} · {tasks.length} total
             </p>

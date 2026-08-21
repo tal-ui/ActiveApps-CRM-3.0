@@ -27,6 +27,7 @@ import AutomationRuleForm, {
   type AutomationRule,
 } from "../../components/AutomationRuleForm";
 import WebhookForm, { type WebhookRow } from "../../components/WebhookForm";
+import HelpButton from "../../components/HelpButton";
 
 type RuleRow = AutomationRule & {
   run_count: number;
@@ -195,9 +196,12 @@ export default function AutomationsPage() {
           <Webhook size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
         </div>
         <div>
-          <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-            Automations & Webhooks
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+              Automations & Webhooks
+            </h1>
+            <HelpButton topic="/settings/automations" />
+          </div>
           <p className="label-mono">rules · endpoints · deliveries</p>
         </div>
       </div>

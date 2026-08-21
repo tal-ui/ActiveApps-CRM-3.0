@@ -45,6 +45,7 @@ import {
 } from "../../lib/layouts";
 import { useAuth } from "../../lib/auth";
 import { Button, ErrorNote, Input, Select, Spinner, Toggle } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 /* ---------- helpers ---------- */
 
@@ -455,9 +456,12 @@ export default function LayoutBuilderPage() {
             <LayoutPanelLeft size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Page Layout Builder
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Page Layout Builder
+              </h1>
+              <HelpButton topic="/settings/layouts" />
+            </div>
             <p className="label-mono">
               Drag fields from the palette · click a field to configure it
             </p>

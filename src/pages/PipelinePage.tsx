@@ -7,6 +7,7 @@ import { useLookupMaps } from "../lib/lookups";
 import { fmtCurrency, fmtDate } from "../lib/format";
 import { EmptyState, ErrorNote, Spinner } from "../components/ui";
 import KanbanBoard from "../components/KanbanBoard";
+import HelpButton from "../components/HelpButton";
 
 interface Opportunity {
   id: string;
@@ -145,9 +146,12 @@ export default function PipelinePage() {
             <Kanban size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Pipeline
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Pipeline
+              </h1>
+              <HelpButton topic="/pipeline" />
+            </div>
             <p className="label-mono">
               {view.openCount} open deal{view.openCount === 1 ? "" : "s"} ·{" "}
               {fmtCurrency(view.openTotal)} in play ·{" "}

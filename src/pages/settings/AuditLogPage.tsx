@@ -11,6 +11,7 @@ import {
   Select,
   Spinner,
 } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 const PAGE_SIZE = 50;
 
@@ -85,9 +86,12 @@ export default function AuditLogPage() {
           <ScrollText size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
         </div>
         <div>
-          <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-            Audit Log
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+              Audit Log
+            </h1>
+            <HelpButton topic="/settings/audit" />
+          </div>
           <p className="label-mono">
             {total} entr{total === 1 ? "y" : "ies"}
           </p>

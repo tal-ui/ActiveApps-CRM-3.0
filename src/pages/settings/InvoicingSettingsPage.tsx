@@ -18,6 +18,7 @@ import {
   Select,
   Spinner,
 } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 /**
  * Everything needed to issue a legal Israeli tax invoice, in one place: the
@@ -252,9 +253,12 @@ export default function InvoicingSettingsPage() {
             <Receipt size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Tax Invoicing
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Tax Invoicing
+              </h1>
+              <HelpButton topic="/settings/invoicing" />
+            </div>
             <p className="label-mono">VAT, issuer identity & provider</p>
           </div>
         </div>
@@ -282,10 +286,6 @@ export default function InvoicingSettingsPage() {
           <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)]">
             Invoicing (Israel)
           </h3>
-          <p className="text-xs text-[var(--text-faint)] mt-1">
-            These details appear on every invoice PDF and are sent to the tax
-            invoicing provider when a document is issued.
-          </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
@@ -380,12 +380,6 @@ export default function InvoicingSettingsPage() {
             )}
           </p>
         </div>
-        <p className="text-xs text-[var(--text-faint)]">
-          Connecting Green Invoice lets the CRM issue real tax invoices, so each
-          one receives a legal document number and an allocation number (מספר
-          הקצאה). Create an API key under Settings → Developer Tools in your
-          Green Invoice account, then paste the key ID and secret here.
-        </p>
         {giConnected && (
           <p className="text-sm text-[var(--text-mid)]">
             API secret: <span className="font-[var(--font-mono)]">••••••••</span>
@@ -451,10 +445,6 @@ export default function InvoicingSettingsPage() {
             </Button>
           )}
         </div>
-        <p className="text-xs text-[var(--text-faint)]">
-          Credentials are stored server-side and are never sent back to the
-          browser. Test only exchanges them for a token — it issues no document.
-        </p>
       </section>
 
       {showGiDisconnect && (

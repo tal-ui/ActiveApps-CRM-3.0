@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Info, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { insertAudit } from "../../lib/audit";
 import { fmtDate } from "../../lib/format";
 import { ErrorNote, Select, Spinner, Toggle } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 interface ProfileRow {
   id: string;
@@ -66,9 +67,12 @@ export default function UsersRolesPage() {
           <Users size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
         </div>
         <div>
-          <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-            Users & Roles
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+              Users & Roles
+            </h1>
+            <HelpButton topic="/settings/users" />
+          </div>
           <p className="label-mono">
             {rows ? `${rows.length} profile${rows.length === 1 ? "" : "s"}` : "loading"}
           </p>
@@ -80,15 +84,6 @@ export default function UsersRolesPage() {
           <ErrorNote message={error} />
         </div>
       )}
-
-      <div className="flex items-start gap-2.5 bg-[var(--card)] border border-[rgba(255,255,255,0.06)] rounded-[var(--radius-md)] px-4 py-3 mb-6 text-sm text-[var(--text-mid)]">
-        <Info size={15} strokeWidth={1.5} className="text-[var(--mint)] mt-0.5 shrink-0" />
-        <span>
-          New users are created in the Supabase dashboard (Auth → Invite). Once
-          they sign in and have a profile, they appear here as members. Admins
-          see the Setup section; members do not.
-        </span>
-      </div>
 
       {!rows ? (
         <Spinner />

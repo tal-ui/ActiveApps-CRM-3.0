@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, Send, Slack } from "lucide-react";
+import { Check, Send, Slack } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { titleCase } from "../../lib/format";
 import {
   Button,
   ErrorNote,
@@ -10,8 +9,7 @@ import {
   Spinner,
   Toggle,
 } from "../../components/ui";
-
-const FUNCTIONS_BASE = "https://ndzvqldluzfstowhhkvd.supabase.co/functions/v1";
+import HelpButton from "../../components/HelpButton";
 
 const EVENTS = [
   ["lead_created", "New lead created"],
@@ -132,9 +130,12 @@ export default function SlackIntegrationPage() {
             <Slack size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Slack Integration
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Slack Integration
+              </h1>
+              <HelpButton topic="/settings/slack" />
+            </div>
             <p className="label-mono flex items-center gap-2">
               {connected ? (
                 <>
@@ -259,61 +260,6 @@ export default function SlackIntegrationPage() {
         </div>
       </section>
 
-      {/* Setup guide */}
-      <section className="bg-[var(--section-darker)] border border-[rgba(255,255,255,0.05)] rounded-[var(--radius-lg)] p-5">
-        <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)] mb-3">
-          Setup Guide
-        </h3>
-        <ol className="space-y-2 text-sm text-[var(--text-mid)] list-decimal list-inside">
-          <li>
-            Create a Slack app at{" "}
-            <a
-              href="https://api.slack.com/apps"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[var(--mint)] hover:underline inline-flex items-center gap-1"
-            >
-              api.slack.com/apps <ExternalLink size={12} strokeWidth={1.5} />
-            </a>{" "}
-            ("From scratch", pick your workspace).
-          </li>
-          <li>
-            Under <span className="text-[var(--text-light)]">OAuth &amp; Permissions</span>, add the bot scope{" "}
-            <code className="font-[var(--font-mono)] text-[var(--mint)] text-xs">chat:write</code>, then click{" "}
-            <span className="text-[var(--text-light)]">Install to Workspace</span> and copy the{" "}
-            <span className="text-[var(--text-light)]">Bot User OAuth Token</span> (xoxb-…) into the field above.
-          </li>
-          <li>
-            Invite the bot to your channel:{" "}
-            <code className="font-[var(--font-mono)] text-[var(--mint)] text-xs">/invite @YourApp</code>. Get the
-            channel ID from the channel's details panel (starts with C).
-          </li>
-          <li>
-            For slash commands: under{" "}
-            <span className="text-[var(--text-light)]">Slash Commands</span>, create{" "}
-            <code className="font-[var(--font-mono)] text-[var(--mint)] text-xs">/crm</code> with Request URL{" "}
-            <code className="font-[var(--font-mono)] text-[var(--mint)] text-xs break-all">
-              {FUNCTIONS_BASE}/slack-commands
-            </code>
-            , then copy the app's{" "}
-            <span className="text-[var(--text-light)]">Signing Secret</span> (Basic Information) into the field above.
-          </li>
-          <li>Save settings, then hit Send Test.</li>
-        </ol>
-        <p className="text-xs text-[var(--text-faint)] mt-4">
-          Try: {["/crm search acme", "/crm pipeline", "/crm my-tasks", "/crm log 2 Acme integration work", "/crm timer start"].map((c, i) => (
-            <span key={c}>
-              {i > 0 && " · "}
-              <code className="font-[var(--font-mono)] text-[var(--text-dim)]">{c}</code>
-            </span>
-          ))}
-        </p>
-        <p className="text-xs text-[var(--text-faint)] mt-2">
-          {titleCase("note")}: notifications fire automatically from the database —
-          new leads, stage changes, invoice status changes, and task assignments —
-          plus an hourly check for 8h+ running timers and overdue invoices.
-        </p>
-      </section>
     </div>
   );
 }

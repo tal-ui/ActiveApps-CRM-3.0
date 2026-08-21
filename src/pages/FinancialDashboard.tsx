@@ -6,6 +6,7 @@ import { useLookupMaps } from "../lib/lookups";
 import { fmtCurrency, startOfMonthMs } from "../lib/format";
 import { Button, Spinner } from "../components/ui";
 import InvoiceGenerator from "../components/InvoiceGenerator";
+import HelpButton from "../components/HelpButton";
 
 interface Invoice {
   id: string;
@@ -143,9 +144,12 @@ export default function FinancialDashboard() {
             <Banknote size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Financial Dashboard
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Financial Dashboard
+              </h1>
+              <HelpButton topic="/financial" />
+            </div>
             <p className="label-mono">
               {view.draftCount > 0 ? `${view.draftCount} draft invoice${view.draftCount === 1 ? "" : "s"} pending` : "all invoices issued"}
             </p>

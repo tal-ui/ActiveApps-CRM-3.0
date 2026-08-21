@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useLookupMaps } from "../lib/lookups";
 import { fmtCurrency, fmtHours } from "../lib/format";
 import { Input, Spinner } from "../components/ui";
+import HelpButton from "../components/HelpButton";
 
 interface Entry {
   project_id: string;
@@ -178,9 +179,12 @@ export default function MonthlyDashboard() {
             <CalendarRange size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Monthly Operations
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Monthly Operations
+              </h1>
+              <HelpButton topic="/monthly" />
+            </div>
             <p className="label-mono">team output and budget health</p>
           </div>
         </div>

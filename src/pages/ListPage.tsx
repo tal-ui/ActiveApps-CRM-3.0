@@ -14,6 +14,7 @@ import InvoiceGenerator from "../components/InvoiceGenerator";
 import FilterBar from "../components/FilterBar";
 import ColumnsMenu from "../components/ColumnsMenu";
 import SavedViewsBar from "../components/SavedViewsBar";
+import HelpButton from "../components/HelpButton";
 
 const PAGE_SIZE = 25;
 
@@ -155,9 +156,12 @@ export default function ListPage() {
             <Icon size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-brand-gradient w-fit">
-              {def.plural}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-brand-gradient w-fit">
+                {def.plural}
+              </h1>
+              <HelpButton topic={`object:${object}`} />
+            </div>
             <p className="label-mono">
               {filtered.length} record{filtered.length === 1 ? "" : "s"}
             </p>

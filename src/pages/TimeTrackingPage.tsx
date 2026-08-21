@@ -11,6 +11,7 @@ import { fmtCurrency, fmtHours } from "../lib/format";
 import { Button, EmptyState, ErrorNote, Input, Select, Spinner } from "../components/ui";
 import DataTable from "../components/DataTable";
 import RecordForm from "../components/RecordForm";
+import HelpButton from "../components/HelpButton";
 
 interface Entry {
   id: string;
@@ -252,9 +253,12 @@ export default function TimeTrackingPage() {
             <Clock size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Time Tracking
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Time Tracking
+              </h1>
+              <HelpButton topic="/time_entries" />
+            </div>
             <p className="label-mono">
               {filtered.length} entr{filtered.length === 1 ? "y" : "ies"}
             </p>

@@ -18,6 +18,7 @@ import {
   titleCase,
 } from "../lib/format";
 import { EmptyState, Spinner } from "../components/ui";
+import HelpButton from "../components/HelpButton";
 
 interface Opp {
   stage: string;
@@ -216,9 +217,12 @@ export default function Dashboard() {
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--mint)] animate-pulse" />
           Command Center
         </span>
-        <h1 className="font-[var(--font-heading)] font-bold text-2xl text-brand-gradient w-fit">
-          Welcome back, {firstName}
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-[var(--font-heading)] font-bold text-2xl text-brand-gradient w-fit">
+            Welcome back, {firstName}
+          </h1>
+          <HelpButton topic="/" />
+        </div>
       </div>
 
       {/* Stat cards */}

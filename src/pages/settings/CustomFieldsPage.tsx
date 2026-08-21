@@ -21,6 +21,7 @@ import {
   Textarea,
   Toggle,
 } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 function toApiName(label: string): string {
   return (
@@ -336,12 +337,13 @@ export default function CustomFieldsPage() {
             />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Custom Fields
-            </h1>
-            <p className="label-mono">
-              Add fields to any object — no database changes needed
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Custom Fields
+              </h1>
+              <HelpButton topic="/settings/custom-fields" />
+            </div>
+            <p className="label-mono">extra fields on any object</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

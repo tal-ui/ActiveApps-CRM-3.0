@@ -41,6 +41,7 @@ import MonthlySummaryActions from "../components/MonthlySummaryActions";
 import QuoteCreateModal from "../components/QuoteCreateModal";
 import AttachmentsPanel from "../components/AttachmentsPanel";
 import AiInsightPanel from "../components/AiInsightPanel";
+import HelpButton from "../components/HelpButton";
 
 // Objects that support file attachments / AI insight
 const ATTACHABLE = [
@@ -428,9 +429,12 @@ export default function RecordPage() {
             </div>
             <div>
               <p className="label-mono">{def.singular}</p>
-              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-                {title}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                  {title}
+                </h1>
+                <HelpButton topic={`object:${object}:record`} />
+              </div>
               <p className="text-xs text-[var(--text-faint)] mt-0.5">
                 Updated {timeAgo(record.updated_at as number)}
               </p>

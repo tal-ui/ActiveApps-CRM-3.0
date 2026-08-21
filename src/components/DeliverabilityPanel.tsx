@@ -173,11 +173,6 @@ export default function DeliverabilityPanel({
             <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)]">
               Deliverability
             </h3>
-            <p className="text-xs text-[var(--text-faint)] mt-1">
-              Whether a recipient's mail server can tell this really came from
-              you. These are DNS records — the CRM can tell you what to publish,
-              but only your DNS host can publish them.
-            </p>
           </div>
         </div>
         <Button variant="ghost" onClick={() => void run(adHoc || undefined)} disabled={loading}>
@@ -350,13 +345,6 @@ export default function DeliverabilityPanel({
               Check
             </Button>
           </div>
-
-          <p className="text-xs text-[var(--text-faint)]">
-            A newly published record can take up to an hour to show here — DNS
-            resolvers remember a missing record for a while. And passing all
-            three removes one reason for a mail server to reject you; it does
-            not guarantee the inbox.
-          </p>
         </>
       )}
     </section>

@@ -36,6 +36,7 @@ import {
   ErrorNote,
   Spinner,
 } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 const SEVERITY_TONES: Record<Severity, string> = {
   critical: "bg-[rgba(228,0,22,0.08)] text-[#F2697A] border-[rgba(228,0,22,0.25)]",
@@ -205,9 +206,12 @@ export default function MaintenancePage() {
             <Wrench size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Data Maintenance
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Data Maintenance
+              </h1>
+              <HelpButton topic="/settings/maintenance" />
+            </div>
             <p className="label-mono">health checks & bulk fixes</p>
           </div>
         </div>

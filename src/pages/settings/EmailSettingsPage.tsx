@@ -23,6 +23,7 @@ import {
   Spinner,
   Textarea,
 } from "../../components/ui";
+import HelpButton from "../../components/HelpButton";
 
 /**
  * How the monthly invoice email goes out: who it comes from, what it says, and
@@ -265,9 +266,12 @@ export default function EmailSettingsPage() {
             <Mail size={20} strokeWidth={1.5} className="text-[var(--mint)]" />
           </div>
           <div>
-            <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
-              Email
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-[var(--font-heading)] font-bold text-xl text-[var(--foreground)]">
+                Email
+              </h1>
+              <HelpButton topic="/settings/email" />
+            </div>
             <p className="label-mono">sender, template & Gmail</p>
           </div>
         </div>
@@ -295,10 +299,6 @@ export default function EmailSettingsPage() {
           <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)]">
             Sender
           </h3>
-          <p className="text-xs text-[var(--text-faint)] mt-1">
-            The person a client sees and replies to. Separate from the issuer
-            identity on Tax Invoicing, which is the legal entity.
-          </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
@@ -333,10 +333,6 @@ export default function EmailSettingsPage() {
           <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)]">
             Monthly Invoice Template
           </h3>
-          <p className="text-xs text-[var(--text-faint)] mt-1">
-            Filled in before the send window opens, and editable there — this is
-            the starting point, not the last word.
-          </p>
         </div>
         <div>
           <FieldLabel>Subject</FieldLabel>
@@ -379,12 +375,6 @@ export default function EmailSettingsPage() {
             <h3 className="font-[var(--font-heading)] font-semibold text-sm text-[var(--foreground)]">
               Gmail (SMTP)
             </h3>
-            <p className="text-xs text-[var(--text-faint)] mt-1">
-              Sends as your own mailbox, so replies land where you expect and
-              Google signs the message. Needs an{" "}
-              <span className="text-[var(--text-mid)]">app password</span> —
-              your normal Google password will not work.
-            </p>
           </div>
           <span
             className={`label-mono ${connected ? "text-[var(--mint)]" : "text-[var(--text-faint)]"}`}
@@ -494,11 +484,6 @@ export default function EmailSettingsPage() {
             </Button>
           )}
         </div>
-        <p className="text-xs text-[var(--text-faint)]">
-          The app password is stored server-side and is never sent back to the
-          browser. Verify authenticates and sends nothing; Send test to me
-          delivers one message to your own address and nowhere else.
-        </p>
       </section>
 
       <DeliverabilityPanel
